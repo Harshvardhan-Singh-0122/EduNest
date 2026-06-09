@@ -1,4 +1,5 @@
 const path = require("path");
+const cloudinary = require("../config/cloudinary");
 const Notes = require("../models/notes");
 
 // Upload notes file info
@@ -23,8 +24,11 @@ const uploadNotes = async (req, res) => {
     originalName: file.originalname,
     storedName: file.filename,
     fileType: file.mimetype,
-    fileSize: file.size,
+    fileSize: file.size || file.bytes || 0,
     filePath: file.path,
+    fileUrl: file.path,
+    publicId: file.filename,
+    resourceType: "raw",
   }));
 
   const note = await Notes.findOneAndUpdate(
@@ -200,20 +204,22 @@ async function serveNoteFile(req, res, shouldDownload) {
       });
     }
 
-    const absolutePath = path.resolve(file.filePath);
-
     if (shouldDownload) {
       note.downloads += 1;
       await note.save();
-      return res.download(absolutePath, file.originalName);
+
+      if (file.publicId) {
+        return res.redirect(getCloudinaryDownloadUrl(file));
+      }
+
+      return res.download(path.resolve(file.filePath), file.originalName);
     }
 
-    res.setHeader("Content-Type", file.fileType);
-    res.setHeader(
-      "Content-Disposition",
-      `inline; filename="${encodeURIComponent(file.originalName)}"`
-    );
-    return res.sendFile(absolutePath);
+    if (file.fileUrl) {
+      return res.redirect(file.fileUrl);
+    }
+
+    return res.sendFile(path.resolve(file.filePath));
   } catch (error) {
     console.error(error);
     return res.status(500).json({
@@ -221,6 +227,14 @@ async function serveNoteFile(req, res, shouldDownload) {
       message: "Unable to open file",
     });
   }
+}
+
+function getCloudinaryDownloadUrl(file) {
+  return cloudinary.url(file.publicId, {
+    resource_type: file.resourceType || "raw",
+    flags: "attachment",
+    secure: true,
+  });
 }
 
 module.exports = {

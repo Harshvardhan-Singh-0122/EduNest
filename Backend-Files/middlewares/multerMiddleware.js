@@ -1,37 +1,38 @@
-const fs = require("fs");
-const path = require("path");
 const multer = require("multer");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../config/cloudinary");
 
-const uploadDir = path.join(__dirname, "../uploads/notes");
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "edunest/notes",
+    resource_type: "raw",
+    allowed_formats: ["pdf"],
+    public_id: (req, file) => {
+      const safeName = file.originalname
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[^a-zA-Z0-9-_]/g, "-")
+        .replace(/-+/g, "-");
 
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
+      return `${Date.now()}-${safeName}`;
     },
-    filename: (req, file, cb) =>{
-        const uniqueName = Date.now() + "-" + file.originalname;
-        cb(null, uniqueName)
-    },
+  },
 });
 
 const fileFilter = (req, file, cb) => {
-    if (file.mimetype === "application/pdf") {
-        cb(null, true);
-    } else {
-        cb(new Error("Only PDF files are allowed"));
-    }
+  if (file.mimetype === "application/pdf") {
+    cb(null, true);
+  } else {
+    cb(new Error("Only PDF files are allowed"));
+  }
 };
 
 const upload = multer({
-    storage,
-    fileFilter,
-    limits: {
-        fileSize: 5 * 1024 * 1024,
-    },
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
 });
 
 module.exports = upload;
