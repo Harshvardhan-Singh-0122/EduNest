@@ -20,16 +20,23 @@ const uploadNotes = async (req, res) => {
     });
   }
 
-  const processedFiles = req.files.map((file) => ({
-    originalName: file.originalname,
-    storedName: file.filename,
-    fileType: file.mimetype,
-    fileSize: file.size || file.bytes || 0,
-    filePath: file.path,
-    fileUrl: file.path,
-    publicId: file.filename,
-    resourceType: "raw",
-  }));
+  const processedFiles = req.files.map((file) => {
+    // multer-storage-cloudinary typically provides cloudinary-specific fields.
+    const publicId = file.public_id || file.filename;
+    const fileUrl = file.secure_url || file.url || null;
+
+    return {
+      originalName: file.originalname,
+      storedName: file.filename,
+      fileType: file.mimetype,
+      fileSize: file.size || file.bytes || 0,
+      // For CloudinaryStorage, we generally should not rely on local paths.
+      filePath: file.path || undefined,
+      fileUrl: fileUrl || undefined,
+      publicId,
+      resourceType: file.resource_type || "raw",
+    };
+  });
 
   const note = await Notes.findOneAndUpdate(
     { _id: noteId, userId: req.user.userId },
@@ -212,14 +219,28 @@ async function serveNoteFile(req, res, shouldDownload) {
         return res.redirect(getCloudinaryDownloadUrl(file));
       }
 
-      return res.download(path.resolve(file.filePath), file.originalName);
+      return res.status(404).json({
+        success: false,
+        message: "File not available for download",
+      });
     }
 
     if (file.fileUrl) {
       return res.redirect(file.fileUrl);
     }
 
-    return res.sendFile(path.resolve(file.filePath));
+    if (file.publicId) {
+      const viewUrl = cloudinary.url(file.publicId, {
+        resource_type: file.resourceType || "raw",
+        secure: true,
+      });
+      return res.redirect(viewUrl);
+    }
+
+    return res.status(404).json({
+      success: false,
+      message: "File not available for viewing",
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({
