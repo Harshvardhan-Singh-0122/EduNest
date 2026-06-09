@@ -6,7 +6,7 @@ const authenticateToken  = (req, res, next) =>{
 
     if(!token){
         return res.status(401).json({
-            message: " Access Denied. No token provied."
+            message: "Access denied. No token provided."
         });
     }
 

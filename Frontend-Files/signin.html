@@ -1,104 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sign In - StudyShare</title>
-    <link rel="stylesheet" href="CSS-Files/signin.css" />
-  </head>
-  <body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - EduNest</title>
+    <link rel="stylesheet" href="CSS-Files/signin.css">
+</head>
+<body>
     <nav class="navbar">
-      <div class="nav-container">
-        <a href="Dashboard.html" class="logo">
-          <img
-            src="images\EduNest-logo-2.png"
-            alt=""
-            height="80px"
-            width="80px"
-          />
-          EduNest
-        </a>
-        <div class="nav-auth">
-          <a href="signup.html" class="btn btn-outline">Sign Up</a>
+        <div class="nav-container">
+            <a href="Dashboard.html" class="logo">
+                <img src="images/EduNest-logo-2.png" alt="EduNest logo" height="80" width="80"> EduNest
+            </a>
+            <div class="nav-auth">
+                <a href="signup.html" class="btn btn-outline">Sign Up</a>
+            </div>
         </div>
-      </div>
     </nav>
 
     <div class="signin-container">
-      <div class="signin-card">
-        <div class="signin-header">
-          <h1>Welcome Back</h1>
-          <p>Sign in to access your study notes</p>
-        </div>
-
-        <div class="success-message" id="successMessage">
-          Successfully signed in! Redirecting...
-        </div>
-
-        <form id="signinForm" action="/api/login" method="post">
-          <div class="form-group">
-            <label for="email">Email Address</label>
-            <input type="email" id="email" name="email" required />
-            <div class="error-message" id="emailError"></div>
-          </div>
-
-          <div class="form-group">
-            <label for="password">Password</label>
-            <div class="password-container">
-              <input type="password" id="password" name="password" required />
-              <button
-                type="button"
-                class="password-toggle"
-                onclick="togglePassword()"
-              >
-                👁️
-              </button>
+        <div class="signin-card">
+            <div class="signin-header">
+                <h1>Welcome Back</h1>
+                <p>Sign in to access your study notes</p>
             </div>
-            <div class="error-message" id="passwordError"></div>
-          </div>
 
-          <div class="form-options">
-            <div class="remember-me">
-              <input type="checkbox" id="remember" name="remember" />
-              <label for="remember">Remember me</label>
+            <div class="success-message" id="successMessage">
+                Successfully signed in! Redirecting...
             </div>
-            <a
-              href="forgetPass.html"
-              id="forget-password"
-              class="forgot-password"
-              >Forgot password?</a
-            >
-          </div>
 
-          <button type="submit" class="btn-primary" id="submitBtn">
-            Sign In
-          </button>
+            <form id="signinForm" action="/api/login" method="post">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" required>
+                    <div class="error-message" id="emailError"></div>
+                </div>
 
-          <div class="loading" id="loadingMessage">
-            <div class="spinner"></div>
-            Signing you in...
-          </div>
-        </form>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <div class="password-container">
+                        <input type="password" id="password" name="password" required>
+                        <button type="button" class="password-toggle" onclick="togglePassword()">Show</button>
+                    </div>
+                    <div class="error-message" id="passwordError"></div>
+                </div>
 
-        <div class="divider">
-          <span>or</span>
+                <div class="form-options">
+                    <div class="remember-me">
+                        <input type="checkbox" id="remember" name="remember">
+                        <label for="remember">Remember me</label>
+                    </div>
+                    <a href="forgetPass.html" id="forget-password" class="forgot-password">Forgot password?</a>
+                </div>
+
+                <button type="submit" class="btn-primary" id="submitBtn">
+                    Sign In
+                </button>
+
+                <div class="loading" id="loadingMessage">
+                    <div class="spinner"></div>
+                    Signing you in...
+                </div>
+            </form>
+
+            <div class="divider">
+                <span>or</span>
+            </div>
+
+            <div class="social-signin">
+                <button class="btn-social" onclick="signinWithGoogle()">Google</button>
+                <button class="btn-social" onclick="signinWithFacebook()">Facebook</button>
+            </div>
+
+            <div class="signup-link">
+                Don't have an account? <a href="signup.html">Sign up</a>
+            </div>
         </div>
-
-        <div class="social-signin">
-          <button class="btn-social" onclick="signinWithGoogle()">
-            <span>🔍</span> Google
-          </button>
-          <button class="btn-social" onclick="signinWithFacebook()">
-            <span>📘</span> Facebook
-          </button>
-        </div>
-
-        <div class="signup-link">
-          Don't have an account? <a href="signup.html">Sign up</a>
-        </div>
-      </div>
     </div>
 
     <script src="/JS-Files/signin.js"></script>
-  </body>
+</body>
 </html>

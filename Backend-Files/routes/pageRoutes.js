@@ -23,7 +23,7 @@ router.get("/upload", (req, res) => {
 });
 
 router.get("/Search", (req, res) => {
-  res.sendFile(path.join(__dirname , "/../../Frontend-Files/searchResult.html"));
+  res.sendFile(path.join(__dirname , "/../../Frontend-Files/SearchResult.html"));
 });
 
 router.get("/reset-password/:token", (req, res) => {
