@@ -200,9 +200,13 @@ document.addEventListener("DOMContentLoaded", function () {
         myDropzone.options.headers = {
           Authorization: `Bearer ${token}`,
         };
-        myDropzone.options.params = {
-          noteId: data.notesDetail._id,
-        };
+
+        // Ensure noteId is included inside multipart/form-data that multer reads on backend
+        myDropzone.removeAllListeners("sending");
+        myDropzone.on("sending", function (file, xhr, formData) {
+          formData.append("noteId", data.notesDetail._id);
+        });
+
         myDropzone.processQueue();
       })
       .catch(() => {

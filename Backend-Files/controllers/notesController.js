@@ -11,7 +11,7 @@ const uploadNotes = async (req, res) => {
     });
   }
 
-  const { noteId } = req.body;
+  const noteId = req.body.noteId || req.body?.params?.noteId;
 
   if (!noteId) {
     return res.status(400).json({
