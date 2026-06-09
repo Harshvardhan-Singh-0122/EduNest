@@ -7,7 +7,6 @@ window.onload = function () {
   const profileName = document.getElementById("profile-fullname");
   const profileUniversity = document.getElementById("profile-universityName");
   const userProfileName = document.getElementById("user-profileName");
-
   const token = localStorage.getItem("token");
 
   if (!token) {
@@ -25,207 +24,188 @@ window.onload = function () {
       if (!data.success) {
         localStorage.removeItem("token");
         window.location.href = "/signin";
+        return;
       }
-      console.log("Welcome", data.user);
+
       const firstName = data.user.firstName;
-      let university = data.user.university;
+      const university = data.user.university;
 
       if (profileName) profileName.innerText = firstName;
       if (profileUniversity) profileUniversity.innerText = university;
       if (userProfileName) userProfileName.innerText = firstName;
-
-      // window.location.href = '/Dashboard';
+    })
+    .catch(() => {
+      localStorage.removeItem("token");
+      window.location.href = "/signin";
     });
 };
 
-// Close dropdown when clicking outside
 document.addEventListener("click", function (event) {
   const dropdown = document.getElementById("profileDropdown");
   const profileBtn = document.querySelector(".profile-btn");
 
-  if (!profileBtn.contains(event.target)) {
+  if (dropdown && profileBtn && !profileBtn.contains(event.target)) {
     dropdown.classList.remove("show");
   }
 });
 
 document.addEventListener("DOMContentLoaded", function () {
-  // Debug: Check if upload area exists
   const uploadElement = document.getElementById("uploadArea");
+  const uploadBtn = document.getElementById("upload-Btn");
+  const resetBtn = document.getElementById("reset-Btn");
+  const uploadForm = document.getElementById("uploadForm");
+  const filePreviewContainer = document.getElementById("filePreviewContainer");
+  const filesGrid = document.getElementById("filesGrid");
+  const filesList = document.getElementById("uploadedFilesList");
+  const uploadResults = document.getElementById("uploadResults");
 
-  // Debug: Check Dropzone CSS
-  const dzStyles = window.getComputedStyle(uploadElement);
-
-  //making & configuration of my Dropzone...
   const myDropzone = new Dropzone("#uploadArea", {
     url: "/api/upload-notes",
-    // url: "https://httpbin.org/post",  // server link that al;lways give success message.
-    dictDefaultMessage: "📄 Click here or drag files to upload",
-    maxFilesize: 5, // 5MB limit
-    acceptedFiles: ".pdf", // Only PDF files
-    maxFiles: 5, // Max 5 files at once
-    addRemoveLinks: true, // Show remove buttons
+    dictDefaultMessage: "Click here or drag PDF files to upload",
+    maxFilesize: 5,
+    acceptedFiles: ".pdf",
+    maxFiles: 5,
+    addRemoveLinks: true,
     autoProcessQueue: false,
     previewTemplate: '<div style="display:none;"></div>',
     headers: {
-      Authorization: `Bearer ${localStorage.getItem("token")}`, // ✅ Add token here
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
   });
 
-  // if (!uploadElement.querySelector(".dz-message")) {
-  //   uploadElement.innerHTML = '<div class="dz-message">📄 Click here or drag files to upload</div>';
-  // }
-
   if (!uploadElement.querySelector(".dz-message")) {
     uploadElement.innerHTML = `
-            <div class="upload-icon">📄</div>
-            <h3>Drag & Drop your PDF files here</h3>
-            <p>or click to browse</p>
-            <p class="upload-info">Maximum file size: 5MB | Supported formats: PDF only</p>
+      <div class="upload-icon">PDF</div>
+      <h3>Drag & Drop your PDF files here</h3>
+      <p>or click to browse</p>
+      <p class="upload-info">Maximum file size: 5MB | Supported formats: PDF only</p>
     `;
   }
 
-  const uploadBtn = document.getElementById("upload-Btn");
-  const resetBtn = document.getElementById("reset-Btn");
-
-  //Event handlers of my Dropzonee.....
   myDropzone.on("addedfile", function (file) {
-    console.log("File added:", file.name);
-
-    const filesGrid = document.getElementById("filesGrid");
-    const filePreviewContainer = document.getElementById(
-      "filePreviewContainer"
-    );
-
-    const fileCard = createFileCard(file);
-
-    filesGrid.insertAdjacentHTML("beforeend", fileCard);
-
+    filesGrid.insertAdjacentHTML("beforeend", createFileCard(file));
     filePreviewContainer.style.display = "block";
-
     uploadBtn.disabled = false;
 
-    const removeBtn = filesGrid.querySelector(
-      `[data-file-name="${file.name}"] .file-remove-btn`
-    );
-    const fileName = file.name;
-    removeBtn.addEventListener("click", () => {
-      const fileToRemove = myDropzone.files.find(
-        (file) => file.name === fileName
-      );
-      if (fileToRemove) {
-        myDropzone.removeFile(fileToRemove);
-      }
-      const removeFileCard = document.querySelector(
-        `[data-file-name="${fileName}"]`
-      );
-      if (removeFileCard) {
-        removeFileCard.remove();
-      }
-      if (myDropzone.files.length === 0) {
-        const filePreviewContainer = document.getElementById(
-          "filePreviewContainer"
-        );
-        filePreviewContainer.style.display = "none";
-        uploadBtn.disabled = true;
-      }
-    });
+    const fileCard = findFileCard(file.name);
+    const removeBtn = fileCard?.querySelector(".file-remove-btn");
+
+    if (removeBtn) {
+      removeBtn.addEventListener("click", () => {
+        myDropzone.removeFile(file);
+      });
+    }
   });
 
   myDropzone.on("removedfile", function (file) {
-    console.log("File removed:", file.name);
-    uploadBtn.disabled = true;
+    const removeFileCard = findFileCard(file.name);
+
+    if (removeFileCard) {
+      removeFileCard.remove();
+    }
+
+    if (myDropzone.files.length === 0) {
+      filePreviewContainer.style.display = "none";
+      uploadBtn.disabled = true;
+    }
   });
 
-  myDropzone.on("success", function (file, response) {
-    console.log("Upload Success:", response);
-
-    const filesList = document.getElementById("uploadedFilesList");
-    const listItem = document.createElement("li");
-    listItem.textContent = `✅ ${file.name} - Upload Successfully`;
-    filesList.appendChild(listItem);
-
-    document.getElementById("uploadResults").style.display = "block";
+  myDropzone.on("success", function (file) {
+    addUploadResult(`${file.name} - Uploaded successfully`, "success");
   });
 
   myDropzone.on("error", function (file, errorMessage) {
-    console.log("Upload error:", errorMessage);
+    const message =
+      typeof errorMessage === "string"
+        ? errorMessage
+        : errorMessage.message || "Upload failed";
 
-    const filesList = document.getElementById("uploadedFilesList");
-    const listItem = document.createElement("li");
-
-    listItem.textContent = `❌ ${file.name} - Upload Failed`;
-    listItem.style.color = "red";
-    filesList.appendChild(listItem);
-
-    document.getElementById("uploadResults").style.display = "block";
+    addUploadResult(`${file.name} - ${message}`, "error");
   });
 
-  uploadBtn.addEventListener("click", () => {
-    console.log("Starting upload...");
-    myDropzone.processQueue();
+  myDropzone.on("queuecomplete", function () {
+    const failedFiles = myDropzone.files.filter(
+      (file) => file.status === Dropzone.ERROR
+    );
+
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = "Upload Notes";
+
+    if (failedFiles.length > 0) {
+      toast("Failed!", "Some files could not be uploaded", "!");
+      return;
+    }
+
+    toast("Success!", "Your notes and files were uploaded", "OK");
+    uploadForm.reset();
+    myDropzone.removeAllFiles(true);
+    filesGrid.innerHTML = "";
+    filePreviewContainer.style.display = "none";
+    uploadBtn.disabled = true;
   });
 
   resetBtn.addEventListener("click", () => {
-    myDropzone.removeAllFiles();
+    uploadForm.reset();
+    myDropzone.removeAllFiles(true);
     uploadBtn.disabled = true;
-    const filesList = document.getElementById("uploadedFilesList");
-    if (filesList) {
-      filesList.innerHTML = "";
-    }
-    document.getElementById("uploadResults").style.display = "none";
-
-    const filesGrid = document.getElementById("filesGrid");
-    if (filesGrid) {
-      filesGrid.innerHTML = "";
-    }
+    filesList.innerHTML = "";
+    filesGrid.innerHTML = "";
+    uploadResults.style.display = "none";
+    filePreviewContainer.style.display = "none";
   });
 
-  const uploadForm = document.getElementById("uploadForm");
   uploadForm.addEventListener("submit", function (e) {
-    e.preventDefault(); // this prevent the automatic reload of the page....
+    e.preventDefault();
 
-    const formData = new FormData(this);
+    if (myDropzone.files.length === 0) {
+      toast("Failed!", "Please select at least one PDF file", "!");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      window.location.href = "/signin";
+      return;
+    }
+
+    const formData = new FormData(uploadForm);
     const formObject = {};
 
     formData.forEach((value, key) => {
       formObject[key] = value;
     });
 
-    myDropzone.files.forEach((file) => {
-      formData.append("Files[]", file);
-    });
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = "Uploading...";
+    filesList.innerHTML = "";
+    uploadResults.style.display = "none";
 
-    console.log(formObject);
-
-    console.log("Form submitted with files:", myDropzone.files.length);
-
-    // for server use..
     fetch("/api/upload-form", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("token")}`, // ✅ Add token here
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(formObject),
     })
       .then((response) => response.json())
       .then((data) => {
-        if (data.success) {
-          uploadForm.reset();
-          // alert("file is successfully uploaded!!!");
-          toast("Success!", "Your notes is uploaded", "✅");
-          console.log("Notes Title:", data.notesDetail.title);
-          console.log("Upload Date:", data.notesDetail.date);
-        } else {
-          // alert(data.message || "file upload failed!!!, Please try again");
-          console.log(data.message);
-          toast("Failed!", data.message, "❌");
+        if (!data.success) {
+          uploadBtn.disabled = false;
+          uploadBtn.textContent = "Upload Notes";
+          toast("Failed!", data.message || "Note details upload failed", "!");
+          return;
         }
+
+        myDropzone.options.headers = {
+          Authorization: `Bearer ${token}`,
+        };
+        myDropzone.processQueue();
       })
-      .catch((error) => {
-        console.log("Error:", error);
-        // alert("an error occurred while uplaoding file. Please try again!");
-        toast("Failed!", "an error occurred", "❌");
+      .catch(() => {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = "Upload Notes";
+        toast("Failed!", "An error occurred while uploading", "!");
       });
   });
 });
@@ -237,78 +217,71 @@ const toastDescription = document.querySelector("#toast-des");
 
 function toast(type, message, sign) {
   toastContainer.classList.remove("hidden");
+  toastContainer.classList.remove("show");
+  void toastContainer.offsetWidth;
   toastContainer.classList.add("show");
-  if (type === "Failed!") {
-    toastContainer.style.backgroundColor = "red";
-  }
+  toastContainer.style.backgroundColor = type === "Failed!" ? "red" : "rgb(25, 160, 25)";
   toastSign.innerText = sign;
   toastType.innerText = type;
   toastDescription.innerText = message;
 }
 
-// console.log(formatFileSize(1080921));
-//---file size formater----
-function formatFileSize(bytes) {
-  if (bytes < 1024) {
-    reduceSize = `${bytes} bytes`;
-    return reduceSize;
-  } else if (bytes < 1048576) {
-    return `${(bytes / 1024).toFixed(2)} KB`;
-  } else {
-    return `${(bytes / 1048576).toFixed(2)} MB`;
+function addUploadResult(message, type) {
+  const filesList = document.getElementById("uploadedFilesList");
+  const uploadResults = document.getElementById("uploadResults");
+  const listItem = document.createElement("li");
+
+  listItem.textContent = message;
+  if (type === "error") {
+    listItem.style.color = "red";
   }
+
+  filesList.appendChild(listItem);
+  uploadResults.style.display = "block";
 }
 
-// const testFile = {
-//   name : 'sample.pdf',
-//   size : 2560000
-// }
+function formatFileSize(bytes) {
+  if (bytes < 1024) {
+    return `${bytes} bytes`;
+  }
 
-// console.log(createFileCard(testFile));
+  if (bytes < 1048576) {
+    return `${(bytes / 1024).toFixed(2)} KB`;
+  }
 
-//-----file card----------
+  return `${(bytes / 1048576).toFixed(2)} MB`;
+}
+
 function createFileCard(file) {
-  const fileName = file.name;
+  const fileName = escapeHtml(file.name);
   const fileSize = formatFileSize(file.size);
 
   return `
-        <div class="file-card" data-file-name="${fileName}">
-            <div class="file-icon">📄</div>
-            <div class="file-info">
-                <div class="file-name">${fileName}</div>
-                <div class="file-size">${fileSize}</div>
-                <div class="file-status ready">Ready to upload</div>
-            </div>
-            <div class="file-actions">
-                <button  type="button" class="file-remove-btn">×</button>
-            </div>
-        </div>
-        `;
+    <div class="file-card" data-file-name="${fileName}">
+      <div class="file-icon">PDF</div>
+      <div class="file-info">
+        <div class="file-name">${fileName}</div>
+        <div class="file-size">${fileSize}</div>
+        <div class="file-status ready">Ready to upload</div>
+      </div>
+      <div class="file-actions">
+        <button type="button" class="file-remove-btn">Remove</button>
+      </div>
+    </div>
+  `;
 }
 
-//---remove button of preview files------
-
-function removeFile(fileName) {
-  alert("remove btn clicked");
-  const fileToRemove = myDropzone.files.find((file) => file.name === fileName);
-  console.log(fileToRemove);
-  if (fileToRemove) {
-    myDropzone.removeFile(fileToRemove);
-  }
-
-  const removeFileCard = document.querySelector(
-    `[data-file-name="${fileName}"]`
+function findFileCard(fileName) {
+  return [...document.querySelectorAll(".file-card")].find(
+    (card) => card.dataset.fileName === fileName
   );
-  console.log(removeFileCard);
-  if (removeFileCard) {
-    removeFileCard.remove();
-  }
+}
 
-  if (myDropzone.files.length === 0) {
-    const filePreviewContainer = document.getElementById(
-      "filePreviewContainer"
-    );
-    filePreviewContainer.style.display = "none";
-    uploadBtn.disabled = true;
-  }
+function escapeHtml(value) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
