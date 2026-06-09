@@ -26,6 +26,10 @@ router.get("/Search", (req, res) => {
   res.sendFile(path.join(__dirname , "/../../Frontend-Files/SearchResult.html"));
 });
 
+router.get("/notes/:id", (req, res) => {
+  res.sendFile(path.join(__dirname , "/../../Frontend-Files/NoteDetail.html"));
+});
+
 router.get("/reset-password/:token", (req, res) => {
   res.sendFile(path.join(__dirname , "/../../Frontend-Files/newPassword.html"));
 });

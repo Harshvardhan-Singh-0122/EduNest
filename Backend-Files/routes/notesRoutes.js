@@ -2,6 +2,10 @@ const express = require("express");
 const {
   uploadFormDetail,
   uploadNotes,
+  getAllNotes,
+  getNoteById,
+  viewNoteFile,
+  downloadNoteFile,
   getUserNotes,
 } = require("../controllers/notesController");
 const upload = require("../middlewares/multerMiddleware");
@@ -28,5 +32,11 @@ router.post("/upload-notes", authMiddleware, (req, res, next) => {
 
 // Protected route: get user notes
 router.get("/notes/my", authMiddleware, getUserNotes);
+
+// Public routes: browse/open/download notes
+router.get("/notes", getAllNotes);
+router.get("/notes/:id", getNoteById);
+router.get("/notes/:id/files/:fileId/view", viewNoteFile);
+router.get("/notes/:id/files/:fileId/download", downloadNoteFile);
 
 module.exports = router;

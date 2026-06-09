@@ -200,6 +200,9 @@ document.addEventListener("DOMContentLoaded", function () {
         myDropzone.options.headers = {
           Authorization: `Bearer ${token}`,
         };
+        myDropzone.options.params = {
+          noteId: data.notesDetail._id,
+        };
         myDropzone.processQueue();
       })
       .catch(() => {

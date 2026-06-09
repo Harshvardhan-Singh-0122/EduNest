@@ -9,6 +9,17 @@ const notesSchema = new mongoose.Schema({
   university: { type: String, required: true },
   course: { type: String, required: true },
   description: { type: String, required: true },
+  tags: [{ type: String }],
+  files: [
+    {
+      originalName: { type: String, required: true },
+      storedName: { type: String, required: true },
+      fileType: { type: String, required: true },
+      fileSize: { type: Number, required: true },
+      filePath: { type: String, required: true },
+      uploadedAt: { type: Date, default: Date.now },
+    },
+  ],
   downloads: { type: Number, default: 0 },
   likes: { type: Number, default: 0 },
   uploadAt: { type: Date, default: Date.now },

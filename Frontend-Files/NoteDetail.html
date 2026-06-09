@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Note Details - EduNest</title>
+    <link rel="stylesheet" href="/CSS-Files/NoteDetail.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/Dashboard.html" class="logo">
+                <img src="/images/EduNest-logo-2.png" alt="EduNest logo" height="64" width="64"> EduNest
+            </a>
+            <div class="nav-actions">
+                <a href="/Search" class="btn btn-secondary">Browse Notes</a>
+                <a href="/upload.html" class="btn btn-primary">Upload Notes</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page-shell">
+        <section class="note-layout">
+            <aside class="note-sidebar">
+                <a href="/Search" class="back-link">Back to notes</a>
+                <h1 id="noteTitle">Loading note...</h1>
+                <p id="noteDescription" class="description"></p>
+
+                <div class="meta-grid">
+                    <div>
+                        <span>Subject</span>
+                        <strong id="noteSubject">-</strong>
+                    </div>
+                    <div>
+                        <span>Branch</span>
+                        <strong id="noteBranch">-</strong>
+                    </div>
+                    <div>
+                        <span>Semester</span>
+                        <strong id="noteSemester">-</strong>
+                    </div>
+                    <div>
+                        <span>Course</span>
+                        <strong id="noteCourse">-</strong>
+                    </div>
+                    <div>
+                        <span>University</span>
+                        <strong id="noteUniversity">-</strong>
+                    </div>
+                    <div>
+                        <span>Uploaded</span>
+                        <strong id="noteUploaded">-</strong>
+                    </div>
+                </div>
+
+                <div class="contributor">
+                    <span>Shared by</span>
+                    <strong id="noteContributor">EduNest user</strong>
+                </div>
+
+                <div id="tagList" class="tag-list"></div>
+
+                <div class="file-panel">
+                    <h2>Files</h2>
+                    <div id="fileList" class="file-list"></div>
+                </div>
+            </aside>
+
+            <section class="pdf-panel">
+                <div class="pdf-toolbar">
+                    <h2 id="selectedFileName">PDF Preview</h2>
+                    <a id="downloadBtn" class="btn btn-primary" href="#" download>Download PDF</a>
+                </div>
+                <iframe id="pdfViewer" title="PDF preview"></iframe>
+                <div id="emptyPreview" class="empty-preview">
+                    Select a PDF file to preview it here.
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <script src="/JS-Files/NoteDetail.js"></script>
+</body>
+</html>
