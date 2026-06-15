@@ -6,18 +6,18 @@
     <title>Upload Notes - EduNest</title>
     <link rel="stylesheet" href="CSS-Files/Upload.css">
     <link rel="stylesheet" href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css" type="text/css" />
-    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/min/dropzone.min.css"> -->
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-container">
             <a href="Dashboard.html" class="logo">
-                <img src="\images\EduNest-logo-2.png" alt="" height="80px" width="80px"> EduNest
+                <img src="/images/EduNest-logo-2.png" alt="EduNest Logo" height="80px" width="80px"> EduNest
             </a>
             <div class="nav-center">
                 <div class="search-bar">
                     <span class="search-icon">🔍</span>
-                    <input type="text" class="search-input" placeholder="Search for notes, subjects, or users...">
+                    <!-- FIX #5: Added id so JS can attach listener -->
+                    <input type="text" id="navSearchInput" class="search-input" placeholder="Search for notes, subjects, or users...">
                 </div>
             </div>
             <div class="nav-auth">
@@ -28,8 +28,6 @@
                     <button class="profile-btn" onclick="toggleDropdown()">
                         <div class="profile-avatar">👨‍🎓</div>
                         <div class="profile-info">
-                            
-                             <!--This is fill by java Script by  -->
                             <div class="profile-name"><span id="profile-fullname"></span></div>
                             <div class="profile-university"><span id="profile-universityName"></span></div>
                         </div>
@@ -38,19 +36,23 @@
                     <div class="dropdown-menu" id="profileDropdown">
                         <a href="Profile.html" class="dropdown-item">👤 My Profile</a>
                         <a href="Dashboard.html" class="dropdown-item">📊 Dashboard</a>
-                        <a href="#" class="dropdown-item">📚 My Notes</a>
+                        <a href="MyNotes.html" class="dropdown-item">📚 My Notes</a>
                         <a href="#" class="dropdown-item">❤️ Favorites</a>
                         <a href="#" class="dropdown-item">⚙️ Settings</a>
                         <a href="#" class="dropdown-item">🔒 Privacy</a>
                         <a href="#" class="dropdown-item">❓ Help</a>
+                        <!-- FIX #4: logout() is now defined in Upload.js -->
                         <a href="#" class="dropdown-item" style="color: #dc3545;" onclick="logout()">🚪 Sign Out</a>
                     </div>
                 </div>
             </div>
         </div>
     </nav>
-    
-    <div class="toast-container hidden">
+
+    <!-- FIX #1: Removed "hidden" class — toast is now identified by
+         "toast-container" alone. Visibility is controlled by JS
+         toggling a separate "show" class, not by removing "hidden". -->
+    <div class="toast-container">
         <div class="toast-sign"><p id="toast-mark"></p></div>
         <div class="toast-msg">
             <h3 id="toast-type"></h3>
@@ -65,32 +67,39 @@
         </div>
 
         <div class="upload-container">
-            <form class="upload-form" id="uploadForm" enctype="multipart/form-data" action="/api/upload-form" method="post">
+            <!-- FIX #3: Removed action, method, and enctype attributes.
+                 JS handles all submission via fetch() with the auth token.
+                 Having action+method caused the browser to submit natively
+                 on any JS failure, bypassing auth and the two-step flow. -->
+            <form class="upload-form" id="uploadForm">
                 <div class="form-section">
                     <h2 class="section-title">📝 Note Details</h2>
-                    
+
                     <div class="form-group">
                         <label for="noteTitle" class="form-label">Note Title *</label>
-                        <input type="text" id="noteTitle" name="noteTitle" class="form-input" 
+                        <input type="text" id="noteTitle" name="noteTitle" class="form-input"
                                placeholder="e.g., Advanced Algorithms - Dynamic Programming" required>
                     </div>
+
                     <div class="form-group">
-                            <label for="branch" class="form-label">Branch *</label>
-<select id="branch" name="branch" class="form-select" required>
-                                <option value="">Select Category</option>
-                                <option value="information-technology">Information Technology</option>
-                                <option value="computer-science">Computer Science</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </div>
+                        <label for="branch" class="form-label">Branch *</label>
+                        <select id="branch" name="branch" class="form-select" required>
+                            <option value="">Select Category</option>
+                            <option value="information-technology">Information Technology</option>
+                            <option value="computer-science">Computer Science</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
 
                     <div class="form-row">
                         <div class="form-group">
                             <label for="subject" class="form-label">Subject *</label>
-<select id="subject" name="subject" class="form-select" required>
+                            <select id="subject" name="subject" class="form-select" required>
                                 <option value="">Select Subject</option>
+                                <!-- FIX #2: Second DBMS option had value="DBMS" (duplicate).
+                                     Corrected to value="DSA" so the right subject is stored. -->
                                 <option value="DBMS">DBMS (Database Management Systems)</option>
-                                <option value="DBMS">DBMS (Data Structures and Algorithms)</option>
+                                <option value="DSA">DSA (Data Structures and Algorithms)</option>
                                 <option value="OOPs">OOPs (Object-Oriented Programming)</option>
                                 <option value="TOC">TOC (Theory of Computation)</option>
                                 <option value="POC">POC (Principles of Communication)</option>
@@ -120,84 +129,58 @@
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="university" class="form-label">College/ University *</label>
-                            <input type="text" id="university" name="university" class="form-input" 
+                            <label for="university" class="form-label">College / University *</label>
+                            <input type="text" id="university" name="university" class="form-input"
                                    placeholder="e.g., SKIT" required>
                         </div>
 
                         <div class="form-group">
                             <label for="course" class="form-label">Course Code *</label>
-                            <input type="text" id="course" name="course" class="form-input" 
+                            <input type="text" id="course" name="course" class="form-input"
                                    placeholder="e.g., 3IT4-24" required>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label for="description" class="form-label">Description</label>
-                        <textarea id="description" name="description" class="form-textarea" rows="4" 
+                        <label for="description" class="form-label">Description *</label>
+                        <textarea id="description" name="description" class="form-textarea" rows="4"
                                   placeholder="Brief description of your notes content, topics covered, etc." required></textarea>
                     </div>
 
                     <div class="form-group">
                         <label for="tags" class="form-label">Tags (Optional)</label>
-                        <input type="text" id="tags" name="tags" class="form-input" 
+                        <input type="text" id="tags" name="tags" class="form-input"
                                placeholder="e.g., algorithms, data structures, programming (separated by commas)">
                     </div>
                 </div>
 
                 <div class="form-section">
                     <h2 class="section-title">📁 File Upload</h2>
-                    
-                    <!-- <div class="upload-area" id="uploadArea">
-                        <div class="upload-icon">📄</div>
-                        <h3>Drag & Drop your PDF files here</h3>
-                        <p>or click to browse</p>
-                        <p class="upload-info">Maximum file size: 5MB | Supported formats: PDF only</p>
-                        <input type="file" id="fileInput" name="files[]" accept=".pdf" multiple hidden>
-                    </div>
-
-                    <div class="file-list" id="fileList"></div> -->
 
                     <div class="upload-area" id="uploadArea">
-                        <!-- Dropzone will automatically add content here -->
+                        <!-- Dropzone fills this area -->
                     </div>
+
                     <div class="file-preview-container" id="filePreviewContainer" style="display: none;">
                         <h3 class="preview-title">📁 Selected Files</h3>
-                        <div class="files-grid" id="filesGrid">
-                            <!-- notes files is show here just after add -->
-                             
-                        </div>
+                        <div class="files-grid" id="filesGrid"></div>
                     </div>
-
-<!-- -------# File card for an idea #--------- -->
-
-<!-- <div class="file-card">
-    <div class="file-icon">📄</div>
-    <div class="file-info">
-        <div class="file-name">Sample Document.pdf</div>
-        <div class="file-size">2.5 MB</div>
-        <div class="file-status ready">Ready to upload</div>
-    </div>
-    <div class="file-actions">
-        <button class="file-remove-btn">×</button>
-    </div>
-</div> -->
                 </div>
 
                 <div class="form-section">
                     <h2 class="section-title">⚙️ Upload Settings</h2>
-                    
+
                     <div class="settings-group">
                         <div class="setting-item">
                             <input type="checkbox" id="allowDownload" name="allowDownload" checked>
                             <label for="allowDownload">Allow downloads</label>
                         </div>
-                        
+
                         <div class="setting-item">
                             <input type="checkbox" id="allowComments" name="allowComments" checked>
                             <label for="allowComments">Allow comments and feedback</label>
                         </div>
-                        
+
                         <div class="setting-item">
                             <input type="checkbox" id="notifyActivity" name="notifyActivity" checked>
                             <label for="notifyActivity">Notify me about activity on this note</label>
@@ -209,12 +192,11 @@
                     <button type="button" id="reset-Btn" class="btn btn-secondary">
                         🔄 Reset Form
                     </button>
-                    <button type="submit" id="upload-Btn" class="btn btn-primary">
+                    <button type="submit" id="upload-Btn" class="btn btn-primary" disabled>
                         📤 Upload Notes
                     </button>
                 </div>
 
-        <!-- Files List code... -->
                 <div id="uploadResults" class="upload-results" style="display: none;">
                     <h4>Uploaded Files:</h4>
                     <ul id="uploadedFilesList"></ul>
@@ -258,7 +240,6 @@
     </div>
 
     <script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
-    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/min/dropzone.min.js"></script> -->
     <script>
         Dropzone.autoDiscover = false;
     </script>
