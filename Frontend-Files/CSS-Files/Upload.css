@@ -210,24 +210,39 @@ body {
     border-bottom: none;
 }
 
-/* Toast message CSS */
+/* ── Toast fix ──────────────────────────────────────────────────────────────
+   The toast-container must be HIDDEN by default using CSS properties,
+   NOT by a class called "hidden" that gets toggled away.
 
+   Add these rules to your Upload.css file.
+   If you already have .toast-container styles, REPLACE them with these.
+────────────────────────────────────────────────────────────────────────── */
 
-.toast-container{
-    
-    width: 280px;
-    height: 50px;
-    border-radius: 5px;
-    background-color: rgb(25, 160, 25);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    z-index: 9999;
-    gap: 15px;
-    position: fixed;
-    right: 20px;
-    top: 120px;
-    transform: translateX(120%);
-    opacity: 1;
-    animation: slideIn 1s ease-out forwards, fadeOut 1s ease forwards 3s;
+.toast-container {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  color: white;
+  z-index: 9999;
+  min-width: 250px;
+
+  /* HIDDEN by default — opacity 0 and pointer-events none */
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(20px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* VISIBLE only when .show is added by JS */
+.toast-container.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 @keyframes slideIn {

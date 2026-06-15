@@ -1,4 +1,4 @@
-// FIX #4: logout() defined at the top so the HTML onclick can always find it
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
 function logout() {
   localStorage.removeItem("token");
   window.location.href = "/signin";
@@ -9,10 +9,11 @@ function toggleDropdown() {
   dropdown.classList.toggle("show");
 }
 
+// ─── Session verify on page load ──────────────────────────────────────────────
 window.onload = function () {
-  const profileName     = document.getElementById("profile-fullname");
-  const profileUniv     = document.getElementById("profile-universityName");
-  const token           = localStorage.getItem("token");
+  const profileName = document.getElementById("profile-fullname");
+  const profileUniv = document.getElementById("profile-universityName");
+  const token       = localStorage.getItem("token");
 
   if (!token) {
     window.location.href = "/signin";
@@ -40,16 +41,17 @@ window.onload = function () {
 
 // Close dropdown when clicking outside
 document.addEventListener("click", function (event) {
-  const dropdown  = document.getElementById("profileDropdown");
+  const dropdown   = document.getElementById("profileDropdown");
   const profileBtn = document.querySelector(".profile-btn");
   if (dropdown && profileBtn && !profileBtn.contains(event.target)) {
     dropdown.classList.remove("show");
   }
 });
 
+// ─── Main logic after DOM is ready ────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", function () {
 
-  // FIX #5: Search bar now navigates to the Search page
+  // Search bar
   const navSearch = document.getElementById("navSearchInput");
   if (navSearch) {
     navSearch.addEventListener("keypress", function (e) {
@@ -59,15 +61,16 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  const uploadElement       = document.getElementById("uploadArea");
-  const uploadBtn           = document.getElementById("upload-Btn");
-  const resetBtn            = document.getElementById("reset-Btn");
-  const uploadForm          = document.getElementById("uploadForm");
+  const uploadElement        = document.getElementById("uploadArea");
+  const uploadBtn            = document.getElementById("upload-Btn");
+  const resetBtn             = document.getElementById("reset-Btn");
+  const uploadForm           = document.getElementById("uploadForm");
   const filePreviewContainer = document.getElementById("filePreviewContainer");
-  const filesGrid           = document.getElementById("filesGrid");
-  const filesList           = document.getElementById("uploadedFilesList");
-  const uploadResults       = document.getElementById("uploadResults");
+  const filesGrid            = document.getElementById("filesGrid");
+  const filesList            = document.getElementById("uploadedFilesList");
+  const uploadResults        = document.getElementById("uploadResults");
 
+  // ── Dropzone setup ──────────────────────────────────────────────────────────
   const myDropzone = new Dropzone("#uploadArea", {
     url: "/api/upload-notes",
     dictDefaultMessage: "Click here or drag PDF files to upload",
@@ -75,12 +78,19 @@ document.addEventListener("DOMContentLoaded", function () {
     acceptedFiles: ".pdf",
     maxFiles: 5,
     addRemoveLinks: true,
+    // ROOT CAUSE FIX: autoProcessQueue MUST be false so Dropzone waits
+    // until we get the noteId back from /api/upload-form before uploading.
+    // If this were true, Dropzone would fire instantly without the noteId
+    // and the backend would reject every file upload.
     autoProcessQueue: false,
+    // ROOT CAUSE FIX: parallelUploads set to 5 so all selected files are
+    // sent when processQueue() is called. Default is 2 which can cause
+    // queuecomplete to fire before all files finish if you have more than 2.
+    parallelUploads: 5,
     previewTemplate: '<div style="display:none;"></div>',
     headers: {
       Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
-    // Prevents duplicate filenames and verifies real PDF MIME type
     accept: function (file, done) {
       const isDuplicate = this.files.some(
         (f) => f !== file && f.name === file.name
@@ -104,6 +114,7 @@ document.addEventListener("DOMContentLoaded", function () {
     `;
   }
 
+  // ── Dropzone events ─────────────────────────────────────────────────────────
   myDropzone.on("addedfile", function (file) {
     filesGrid.insertAdjacentHTML("beforeend", createFileCard(file));
     filePreviewContainer.style.display = "block";
@@ -119,7 +130,6 @@ document.addEventListener("DOMContentLoaded", function () {
   myDropzone.on("removedfile", function (file) {
     const card = findFileCard(file.name);
     if (card) card.remove();
-
     if (myDropzone.files.length === 0) {
       filePreviewContainer.style.display = "none";
       uploadBtn.disabled = true;
@@ -138,12 +148,16 @@ document.addEventListener("DOMContentLoaded", function () {
     addUploadResult(`${file.name} - ${message}`, "error");
   });
 
+  // ROOT CAUSE FIX: This is the key event.
+  // queuecomplete fires when ALL files have finished (success or error).
+  // Previously the toast and reset ran here, which is correct.
+  // But we also check if ANY file failed and keep the failed files visible.
   myDropzone.on("queuecomplete", function () {
     const failedFiles = myDropzone.files.filter(
       (f) => f.status === Dropzone.ERROR
     );
 
-    uploadBtn.disabled = false;
+    uploadBtn.disabled    = false;
     uploadBtn.textContent = "📤 Upload Notes";
 
     if (failedFiles.length > 0) {
@@ -159,16 +173,18 @@ document.addEventListener("DOMContentLoaded", function () {
     uploadBtn.disabled = true;
   });
 
+  // ── Reset button ────────────────────────────────────────────────────────────
   resetBtn.addEventListener("click", () => {
     uploadForm.reset();
     myDropzone.removeAllFiles(true);
-    uploadBtn.disabled = true;
-    filesList.innerHTML = "";
-    filesGrid.innerHTML = "";
+    uploadBtn.disabled          = true;
+    filesList.innerHTML         = "";
+    filesGrid.innerHTML         = "";
     uploadResults.style.display = "none";
     filePreviewContainer.style.display = "none";
   });
 
+  // ── Form submit ─────────────────────────────────────────────────────────────
   uploadForm.addEventListener("submit", function (e) {
     e.preventDefault();
 
@@ -183,6 +199,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
+    // Collect form fields into a plain object for JSON body
     const formData   = new FormData(uploadForm);
     const formObject = {};
     formData.forEach((value, key) => { formObject[key] = value; });
@@ -192,11 +209,12 @@ document.addEventListener("DOMContentLoaded", function () {
     filesList.innerHTML   = "";
     uploadResults.style.display = "none";
 
+    // STEP 1: Save the note metadata first to get a noteId
     fetch("/api/upload-form", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization:  `Bearer ${token}`,
       },
       body: JSON.stringify(formObject),
     })
@@ -209,17 +227,30 @@ document.addEventListener("DOMContentLoaded", function () {
           return;
         }
 
-        myDropzone.options.headers = { Authorization: `Bearer ${token}` };
-
-        // Store noteId in a variable — avoids referencing a nested chain
-        // inside the sending callback
+        // ROOT CAUSE FIX: This is the most critical part.
+        // We MUST attach the "sending" listener BEFORE calling processQueue().
+        // The sending event fires for each file just before it is sent —
+        // this is the only reliable place to append noteId to the multipart
+        // form data that multer reads on the backend.
+        //
+        // We also update the auth header here in case the token changed.
         const noteId = data.notesDetail._id;
 
+        // Clear any previously registered sending listeners first
+        // to avoid stacking them on multiple submit attempts
         myDropzone.removeAllListeners("sending");
-        myDropzone.on("sending", function (file, xhr, fd) {
-          fd.append("noteId", noteId);
+
+        myDropzone.on("sending", function (file, xhr, formData) {
+          // STEP 2: Append noteId to every file's multipart upload
+          formData.append("noteId", noteId);
         });
 
+        // Update the auth header on the Dropzone instance itself
+        myDropzone.options.headers = {
+          Authorization: `Bearer ${token}`,
+        };
+
+        // STEP 3: Now trigger the actual file uploads to /api/upload-notes
         myDropzone.processQueue();
       })
       .catch(() => {
@@ -231,24 +262,27 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
-// FIX #1: querySelector uses the stable class "toast-container" — NOT ".hidden"
-// ".hidden" was removed from the element after the first toast call, so
-// every subsequent call returned null and crashed. "toast-container" never
-// changes, so it always resolves correctly no matter how many times toast fires.
+// Uses ".toast-container" — a stable class that never gets toggled.
+// "show" is the only class that changes to control visibility.
+// The CSS must hide .toast-container by default and show it when
+// .toast-container.show is present.
 function toast(type, message, sign) {
-  const toastContainer  = document.querySelector(".toast-container");
-  const toastSign       = document.querySelector("#toast-mark");
-  const toastType       = document.querySelector("#toast-type");
-  const toastDesc       = document.querySelector("#toast-des");
+  const toastContainer = document.querySelector(".toast-container");
+  const toastSign      = document.querySelector("#toast-mark");
+  const toastType      = document.querySelector("#toast-type");
+  const toastDesc      = document.querySelector("#toast-des");
 
   if (!toastContainer || !toastSign || !toastType || !toastDesc) {
-    console.warn("Toast elements not found in DOM. Check upload.html structure.");
+    console.warn("Toast elements not found. Check upload.html structure.");
     return;
   }
 
+  // Remove show first, force a reflow, then re-add
+  // so the CSS animation restarts even if toast fires twice in a row
   toastContainer.classList.remove("show");
-  void toastContainer.offsetWidth; // force reflow so animation restarts
+  void toastContainer.offsetWidth;
   toastContainer.classList.add("show");
+
   toastContainer.style.backgroundColor =
     type === "Failed!" ? "red" : "rgb(25, 160, 25)";
   toastSign.innerText = sign;
@@ -261,10 +295,8 @@ function addUploadResult(message, type) {
   const filesList     = document.getElementById("uploadedFilesList");
   const uploadResults = document.getElementById("uploadResults");
   const listItem      = document.createElement("li");
-
   listItem.textContent = message;
   if (type === "error") listItem.style.color = "red";
-
   filesList.appendChild(listItem);
   uploadResults.style.display = "block";
 }
@@ -278,7 +310,6 @@ function formatFileSize(bytes) {
 function createFileCard(file) {
   const fileName = escapeHtml(file.name);
   const fileSize = formatFileSize(file.size);
-
   return `
     <div class="file-card" data-file-name="${fileName}">
       <div class="file-icon">PDF</div>
