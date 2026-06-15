@@ -11,6 +11,8 @@ const uploadNotes = async (req, res) => {
     });
   }
 
+  console.log(req.files);
+
   const noteId = req.body.noteId || req.body?.params?.noteId;
 
   if (!noteId) {
@@ -23,7 +25,7 @@ const uploadNotes = async (req, res) => {
   const processedFiles = req.files.map((file) => {
     // multer-storage-cloudinary typically provides cloudinary-specific fields.
     const publicId = file.public_id || file.filename;
-    const fileUrl = file.secure_url || file.url || null;
+    const fileUrl = file.path;
 
     return {
       originalName: file.originalname,
@@ -60,6 +62,8 @@ const uploadNotes = async (req, res) => {
       fileSize: file.fileSize,
     })),
   });
+
+
 };
 
 // Upload form details
