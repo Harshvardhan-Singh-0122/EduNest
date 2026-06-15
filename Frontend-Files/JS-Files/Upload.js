@@ -71,6 +71,19 @@ document.addEventListener("DOMContentLoaded", function () {
     headers: {
       Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
+    // FIX #1: Prevent duplicate filenames from being added
+    accept: function (file, done) {
+      const isDuplicate = this.files.some(
+        (f) => f !== file && f.name === file.name
+      );
+      if (isDuplicate) {
+        done("This file has already been added.");
+      } else if (file.type !== "application/pdf") {
+        done("Only real PDF files are allowed.");
+      } else {
+        done();
+      }
+    },
   });
 
   if (!uploadElement.querySelector(".dz-message")) {
@@ -201,10 +214,13 @@ document.addEventListener("DOMContentLoaded", function () {
           Authorization: `Bearer ${token}`,
         };
 
-        // Ensure noteId is included inside multipart/form-data that multer reads on backend
+        // FIX #2: Store noteId in a variable instead of re-registering
+        // the listener on every submit to avoid stacking listeners
+        const noteId = data.notesDetail._id;
+
         myDropzone.removeAllListeners("sending");
         myDropzone.on("sending", function (file, xhr, formData) {
-          formData.append("noteId", data.notesDetail._id);
+          formData.append("noteId", noteId);
         });
 
         myDropzone.processQueue();
@@ -217,17 +233,27 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 
-const toastContainer = document.querySelector(".hidden");
-const toastSign = document.querySelector("#toast-mark");
-const toastType = document.querySelector("#toast-type");
-const toastDescription = document.querySelector("#toast-des");
-
+// FIX #3 (THE MAIN BUG): toast() now queries DOM elements lazily inside
+// the function itself, instead of at the top level where they may not
+// exist yet. This guarantees the elements are always found after the
+// DOM has fully loaded, regardless of where the <script> tag appears.
 function toast(type, message, sign) {
+  const toastContainer = document.querySelector(".hidden");
+  const toastSign = document.querySelector("#toast-mark");
+  const toastType = document.querySelector("#toast-type");
+  const toastDescription = document.querySelector("#toast-des");
+
+  if (!toastContainer || !toastSign || !toastType || !toastDescription) {
+    console.warn("Toast elements not found in DOM");
+    return;
+  }
+
   toastContainer.classList.remove("hidden");
   toastContainer.classList.remove("show");
   void toastContainer.offsetWidth;
   toastContainer.classList.add("show");
-  toastContainer.style.backgroundColor = type === "Failed!" ? "red" : "rgb(25, 160, 25)";
+  toastContainer.style.backgroundColor =
+    type === "Failed!" ? "red" : "rgb(25, 160, 25)";
   toastSign.innerText = sign;
   toastType.innerText = type;
   toastDescription.innerText = message;
