@@ -78,32 +78,42 @@ document.addEventListener("DOMContentLoaded", function () {
     acceptedFiles: ".pdf",
     maxFiles: 5,
     addRemoveLinks: true,
-    // ROOT CAUSE FIX: autoProcessQueue MUST be false so Dropzone waits
-    // until we get the noteId back from /api/upload-form before uploading.
-    // If this were true, Dropzone would fire instantly without the noteId
-    // and the backend would reject every file upload.
     autoProcessQueue: false,
-    // ROOT CAUSE FIX: parallelUploads set to 5 so all selected files are
-    // sent when processQueue() is called. Default is 2 which can cause
-    // queuecomplete to fire before all files finish if you have more than 2.
     parallelUploads: 5,
     previewTemplate: '<div style="display:none;"></div>',
     headers: {
       Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
+    // DEBUG: Temporarily removed strict MIME check — only checking extension
+    // so we can confirm whether MIME type mismatch was blocking uploads
     accept: function (file, done) {
+      console.log("[DEBUG] File added to Dropzone:", file.name);
+      console.log("[DEBUG] File MIME type:", file.type);
+      console.log("[DEBUG] File size:", file.size);
+
       const isDuplicate = this.files.some(
         (f) => f !== file && f.name === file.name
       );
+
       if (isDuplicate) {
+        console.warn("[DEBUG] Rejected — duplicate filename:", file.name);
         done("This file has already been added.");
-      } else if (file.type !== "application/pdf") {
-        done("Only real PDF files are allowed.");
-      } else {
-        done();
+        return;
       }
+
+      const hasValidExt = file.name.toLowerCase().endsWith(".pdf");
+      if (!hasValidExt) {
+        console.warn("[DEBUG] Rejected — not a PDF extension:", file.name);
+        done("Only PDF files are allowed.");
+        return;
+      }
+
+      console.log("[DEBUG] File accepted:", file.name);
+      done();
     },
   });
+
+  console.log("[DEBUG] Dropzone initialized on #uploadArea");
 
   if (!uploadElement.querySelector(".dz-message")) {
     uploadElement.innerHTML = `
@@ -116,6 +126,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // ── Dropzone events ─────────────────────────────────────────────────────────
   myDropzone.on("addedfile", function (file) {
+    console.log("[DEBUG] addedfile event fired:", file.name, "| status:", file.status);
     filesGrid.insertAdjacentHTML("beforeend", createFileCard(file));
     filePreviewContainer.style.display = "block";
     uploadBtn.disabled = false;
@@ -128,6 +139,7 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   myDropzone.on("removedfile", function (file) {
+    console.log("[DEBUG] removedfile event fired:", file.name);
     const card = findFileCard(file.name);
     if (card) card.remove();
     if (myDropzone.files.length === 0) {
@@ -136,11 +148,23 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  myDropzone.on("success", function (file) {
+  myDropzone.on("sending", function (file, xhr, formData) {
+    console.log("[DEBUG] sending event fired for:", file.name);
+    console.log("[DEBUG] Request URL:", xhr.responseURL || myDropzone.options.url);
+  });
+
+  myDropzone.on("success", function (file, response) {
+    console.log("[DEBUG] success event fired:", file.name);
+    console.log("[DEBUG] Server response:", response);
     addUploadResult(`${file.name} - Uploaded successfully`, "success");
   });
 
-  myDropzone.on("error", function (file, errorMessage) {
+  myDropzone.on("error", function (file, errorMessage, xhr) {
+    console.error("[DEBUG] error event fired:", file.name);
+    console.error("[DEBUG] Error message:", errorMessage);
+    console.error("[DEBUG] XHR status:", xhr ? xhr.status : "no xhr");
+    console.error("[DEBUG] XHR response:", xhr ? xhr.responseText : "no xhr");
+
     const message =
       typeof errorMessage === "string"
         ? errorMessage
@@ -148,11 +172,13 @@ document.addEventListener("DOMContentLoaded", function () {
     addUploadResult(`${file.name} - ${message}`, "error");
   });
 
-  // ROOT CAUSE FIX: This is the key event.
-  // queuecomplete fires when ALL files have finished (success or error).
-  // Previously the toast and reset ran here, which is correct.
-  // But we also check if ANY file failed and keep the failed files visible.
   myDropzone.on("queuecomplete", function () {
+    console.log("[DEBUG] queuecomplete event fired");
+    console.log("[DEBUG] All files status:", myDropzone.files.map(f => ({
+      name: f.name,
+      status: f.status
+    })));
+
     const failedFiles = myDropzone.files.filter(
       (f) => f.status === Dropzone.ERROR
     );
@@ -161,6 +187,7 @@ document.addEventListener("DOMContentLoaded", function () {
     uploadBtn.textContent = "📤 Upload Notes";
 
     if (failedFiles.length > 0) {
+      console.warn("[DEBUG] Some files failed:", failedFiles.map(f => f.name));
       toast("Failed!", "Some files could not be uploaded", "!");
       return;
     }
@@ -173,8 +200,17 @@ document.addEventListener("DOMContentLoaded", function () {
     uploadBtn.disabled = true;
   });
 
+  myDropzone.on("processing", function (file) {
+    console.log("[DEBUG] processing event fired — Dropzone is now uploading:", file.name);
+  });
+
+  myDropzone.on("uploadprogress", function (file, progress) {
+    console.log(`[DEBUG] uploadprogress: ${file.name} — ${progress.toFixed(0)}%`);
+  });
+
   // ── Reset button ────────────────────────────────────────────────────────────
   resetBtn.addEventListener("click", () => {
+    console.log("[DEBUG] Reset button clicked");
     uploadForm.reset();
     myDropzone.removeAllFiles(true);
     uploadBtn.disabled          = true;
@@ -187,11 +223,20 @@ document.addEventListener("DOMContentLoaded", function () {
   // ── Form submit ─────────────────────────────────────────────────────────────
   uploadForm.addEventListener("submit", function (e) {
     e.preventDefault();
+    console.log("[DEBUG] Form submit triggered");
 
     if (myDropzone.files.length === 0) {
+      console.warn("[DEBUG] No files in Dropzone queue — aborting");
       toast("Failed!", "Please select at least one PDF file", "!");
       return;
     }
+
+    console.log("[DEBUG] Files in Dropzone at submit time:", myDropzone.files.map(f => ({
+      name: f.name,
+      status: f.status,
+      accepted: f.accepted,
+      type: f.type,
+    })));
 
     const token = localStorage.getItem("token");
     if (!token) {
@@ -199,17 +244,18 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // Collect form fields into a plain object for JSON body
     const formData   = new FormData(uploadForm);
     const formObject = {};
     formData.forEach((value, key) => { formObject[key] = value; });
+
+    console.log("[DEBUG] Form data being sent to /api/upload-form:", formObject);
 
     uploadBtn.disabled    = true;
     uploadBtn.textContent = "Uploading...";
     filesList.innerHTML   = "";
     uploadResults.style.display = "none";
 
-    // STEP 1: Save the note metadata first to get a noteId
+    // STEP 1 — save note metadata, get noteId back
     fetch("/api/upload-form", {
       method: "POST",
       headers: {
@@ -218,8 +264,13 @@ document.addEventListener("DOMContentLoaded", function () {
       },
       body: JSON.stringify(formObject),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        console.log("[DEBUG] /api/upload-form response status:", res.status);
+        return res.json();
+      })
       .then((data) => {
+        console.log("[DEBUG] /api/upload-form response body:", data);
+
         if (!data.success) {
           uploadBtn.disabled    = false;
           uploadBtn.textContent = "📤 Upload Notes";
@@ -227,33 +278,38 @@ document.addEventListener("DOMContentLoaded", function () {
           return;
         }
 
-        // ROOT CAUSE FIX: This is the most critical part.
-        // We MUST attach the "sending" listener BEFORE calling processQueue().
-        // The sending event fires for each file just before it is sent —
-        // this is the only reliable place to append noteId to the multipart
-        // form data that multer reads on the backend.
-        //
-        // We also update the auth header here in case the token changed.
         const noteId = data.notesDetail._id;
+        console.log("[DEBUG] noteId received:", noteId);
 
-        // Clear any previously registered sending listeners first
-        // to avoid stacking them on multiple submit attempts
-        myDropzone.removeAllListeners("sending");
+        // Check queue state before attaching listener
+        console.log("[DEBUG] Files in queue before processQueue():", myDropzone.files.length);
+        console.log("[DEBUG] File statuses:", myDropzone.files.map(f => ({
+          name: f.name,
+          status: f.status,
+          accepted: f.accepted,
+        })));
 
-        myDropzone.on("sending", function (file, xhr, formData) {
-          // STEP 2: Append noteId to every file's multipart upload
-          formData.append("noteId", noteId);
+        // STEP 2 — attach sending listener with noteId BEFORE processQueue()
+        myDropzone.off("sending");
+
+        myDropzone.on("sending", function (file, xhr, fd) {
+          console.log("[DEBUG] sending event — appending noteId:", noteId, "to file:", file.name);
+          fd.append("noteId", noteId);
         });
 
-        // Update the auth header on the Dropzone instance itself
         myDropzone.options.headers = {
           Authorization: `Bearer ${token}`,
         };
 
-        // STEP 3: Now trigger the actual file uploads to /api/upload-notes
+        console.log("[DEBUG] Calling processQueue() now...");
+
+        // STEP 3 — trigger actual file uploads to /api/upload-notes
         myDropzone.processQueue();
+
+        console.log("[DEBUG] processQueue() called — waiting for uploads...");
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("[DEBUG] fetch /api/upload-form threw an error:", err);
         uploadBtn.disabled    = false;
         uploadBtn.textContent = "📤 Upload Notes";
         toast("Failed!", "An error occurred while uploading", "!");
@@ -262,10 +318,6 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
-// Uses ".toast-container" — a stable class that never gets toggled.
-// "show" is the only class that changes to control visibility.
-// The CSS must hide .toast-container by default and show it when
-// .toast-container.show is present.
 function toast(type, message, sign) {
   const toastContainer = document.querySelector(".toast-container");
   const toastSign      = document.querySelector("#toast-mark");
@@ -273,12 +325,12 @@ function toast(type, message, sign) {
   const toastDesc      = document.querySelector("#toast-des");
 
   if (!toastContainer || !toastSign || !toastType || !toastDesc) {
-    console.warn("Toast elements not found. Check upload.html structure.");
+    console.warn("[DEBUG] Toast elements not found in DOM. Check upload.html.");
     return;
   }
 
-  // Remove show first, force a reflow, then re-add
-  // so the CSS animation restarts even if toast fires twice in a row
+  console.log("[DEBUG] Toast fired — type:", type, "| message:", message);
+
   toastContainer.classList.remove("show");
   void toastContainer.offsetWidth;
   toastContainer.classList.add("show");
