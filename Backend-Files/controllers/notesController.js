@@ -1,130 +1,122 @@
-const path = require("path");
 const cloudinary = require("../config/cloudinary");
-const Notes = require("../models/notes");
+const Notes      = require("../models/notes");
 
 // Upload notes file info
 const uploadNotes = async (req, res) => {
-  if (!req.files || req.files.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "No files uploaded",
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No files uploaded",
+      });
+    }
+
+    const noteId = req.body.noteId;
+
+    if (!noteId) {
+      return res.status(400).json({
+        success: false,
+        message: "Note id is required before uploading files",
+      });
+    }
+
+    const processedFiles = req.files.map((file) => {
+      const publicId = file.public_id || file.filename;
+      const fileUrl  = file.secure_url || file.url || null;
+
+      return {
+        originalName: file.originalname,
+        storedName:   file.filename,
+        fileType:     file.mimetype,
+        fileSize:     file.size || file.bytes || 0,
+        filePath:     file.path || undefined,
+        fileUrl:      fileUrl   || undefined,
+        publicId,
+        // FIX: store as "image" to match the new multer config.
+        // This ensures view/download URLs are built with the correct
+        // resource_type so Cloudinary returns the file with the right
+        // Content-Type header (application/pdf, not octet-stream).
+        resourceType: "image",
+      };
     });
-  }
 
-  console.log(req.files);
+    const note = await Notes.findOneAndUpdate(
+      { _id: noteId, userId: req.user.userId },
+      { $push: { files: { $each: processedFiles } } },
+      { new: true }
+    );
 
-  const noteId = req.body.noteId || req.body?.params?.noteId;
+    if (!note) {
+      return res.status(404).json({
+        success: false,
+        message: "Note not found for this user",
+      });
+    }
 
-  if (!noteId) {
-    return res.status(400).json({
-      success: false,
-      message: "Note id is required before uploading files",
+    res.json({
+      success:    true,
+      message:    "File Uploaded!",
+      filesCount: processedFiles.length,
+      files: processedFiles.map((file) => ({
+        fileName: file.originalName,
+        fileSize: file.fileSize,
+      })),
     });
+  } catch (err) {
+    console.error("uploadNotes error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
-
-  const processedFiles = req.files.map((file) => {
-    // multer-storage-cloudinary typically provides cloudinary-specific fields.
-    const publicId = file.public_id || file.filename;
-    const fileUrl = file.path;
-
-    return {
-      originalName: file.originalname,
-      storedName: file.filename,
-      fileType: file.mimetype,
-      fileSize: file.size || file.bytes || 0,
-      // For CloudinaryStorage, we generally should not rely on local paths.
-      filePath: file.path || undefined,
-      fileUrl: fileUrl || undefined,
-      publicId,
-      resourceType: file.resource_type || "raw",
-    };
-  });
-
-  const note = await Notes.findOneAndUpdate(
-    { _id: noteId, userId: req.user.userId },
-    { $push: { files: { $each: processedFiles } } },
-    { new: true }
-  );
-
-  if (!note) {
-    return res.status(404).json({
-      success: false,
-      message: "Note not found for this user",
-    });
-  }
-
-  res.json({
-    success: true,
-    message: "File Uploaded!",
-    filesCount: processedFiles.length,
-    files: processedFiles.map((file) => ({
-      fileName: file.originalName,
-      fileSize: file.fileSize,
-    })),
-  });
-
-
 };
 
 // Upload form details
 const uploadFormDetail = async (req, res) => {
-  const {
-    noteTitle,
-    branch,
-    subject,
-    semester,
-    university,
-    course,
-    description,
-    tags,
-  } = req.body;
+  try {
+    const {
+      noteTitle, branch, subject, semester,
+      university, course, description, tags,
+    } = req.body;
 
-  if (
-    !noteTitle ||
-    !branch ||
-    !subject ||
-    !semester ||
-    !university ||
-    !course ||
-    !description
-  ) {
-    return res.json({ success: false, message: "Please fill all details" });
+    if (!noteTitle || !branch || !subject || !semester ||
+        !university || !course || !description) {
+      return res.status(400).json({
+        success: false,
+        message: "Please fill all details",
+      });
+    }
+
+    const newNotes = new Notes({
+      userId:      req.user.userId,
+      title:       noteTitle,
+      branch, subject, semester, university, course, description,
+      tags:        parseTags(tags),
+    });
+
+    await newNotes.save();
+
+    res.json({
+      success:      true,
+      message:      "Note added to DB",
+      notesDetail:  newNotes,
+    });
+  } catch (err) {
+    console.error("uploadFormDetail error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
-
-  const newNotes = new Notes({
-    userId: req.user.userId,
-    title: noteTitle,
-    branch,
-    subject,
-    semester,
-    university,
-    course,
-    description,
-    tags: parseTags(tags),
-  });
-
-  await newNotes.save();
-
-  res.json({
-    success: true,
-    message: "Note added to DB",
-    notesDetail: newNotes,
-  });
 };
 
 const getAllNotes = async (req, res) => {
   try {
     const { q } = req.query;
-    const query = {};
+    const query  = {};
 
     if (q) {
       query.$or = [
-        { title: { $regex: q, $options: "i" } },
-        { subject: { $regex: q, $options: "i" } },
-        { branch: { $regex: q, $options: "i" } },
+        { title:      { $regex: q, $options: "i" } },
+        { subject:    { $regex: q, $options: "i" } },
+        { branch:     { $regex: q, $options: "i" } },
         { university: { $regex: q, $options: "i" } },
-        { course: { $regex: q, $options: "i" } },
-        { tags: { $regex: q, $options: "i" } },
+        { course:     { $regex: q, $options: "i" } },
+        { tags:       { $regex: q, $options: "i" } },
       ];
     }
 
@@ -142,8 +134,7 @@ const getAllNotes = async (req, res) => {
 const getNoteById = async (req, res) => {
   try {
     const note = await Notes.findById(req.params.id).populate(
-      "userId",
-      "firstName lastName fullName university"
+      "userId", "firstName lastName fullName university"
     );
 
     if (!note) {
@@ -155,10 +146,15 @@ const getNoteById = async (req, res) => {
 
     res.json({ success: true, note });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: "Invalid note id",
-    });
+    // FIX: only return 400 for invalid ObjectId, not for all errors
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid note id",
+      });
+    }
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -170,14 +166,11 @@ const downloadNoteFile = async (req, res) => {
   serveNoteFile(req, res, true);
 };
 
-// Get notes for logged-in user
 const getUserNotes = async (req, res) => {
   try {
     const notes = await Notes.find({ userId: req.user.userId })
       .populate("userId", "firstName lastName fullName university")
-      .sort({
-        uploadAt: -1,
-      });
+      .sort({ uploadAt: -1 });
 
     res.json({ success: true, notes });
   } catch (error) {
@@ -188,11 +181,7 @@ const getUserNotes = async (req, res) => {
 
 function parseTags(tags) {
   if (!tags) return [];
-
-  return tags
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
+  return tags.split(",").map((tag) => tag.trim()).filter(Boolean);
 }
 
 async function serveNoteFile(req, res, shouldDownload) {
@@ -200,27 +189,32 @@ async function serveNoteFile(req, res, shouldDownload) {
     const note = await Notes.findById(req.params.id);
 
     if (!note) {
-      return res.status(404).json({
-        success: false,
-        message: "Note not found",
-      });
+      return res.status(404).json({ success: false, message: "Note not found" });
     }
 
     const file = note.files.id(req.params.fileId);
 
     if (!file) {
-      return res.status(404).json({
-        success: false,
-        message: "File not found",
-      });
+      return res.status(404).json({ success: false, message: "File not found" });
     }
+
+    // FIX: always use "image" resource_type for PDFs stored after this fix.
+    // Falls back to whatever is stored in file.resourceType for old records.
+    const resourceType = file.resourceType || "image";
 
     if (shouldDownload) {
       note.downloads += 1;
       await note.save();
 
       if (file.publicId) {
-        return res.redirect(getCloudinaryDownloadUrl(file));
+        const downloadUrl = cloudinary.url(file.publicId, {
+          resource_type: resourceType,
+          // "attachment" flag tells Cloudinary to set
+          // Content-Disposition: attachment so browser downloads the file
+          flags:         "attachment",
+          secure:        true,
+        });
+        return res.redirect(downloadUrl);
       }
 
       return res.status(404).json({
@@ -229,14 +223,19 @@ async function serveNoteFile(req, res, shouldDownload) {
       });
     }
 
+    // View (inline)
     if (file.fileUrl) {
       return res.redirect(file.fileUrl);
     }
 
     if (file.publicId) {
+      // FIX: for inline PDF viewing, we need fl_inline so the browser
+      // opens it instead of downloading, and resource_type: image
+      // so Cloudinary serves it with Content-Type: application/pdf
       const viewUrl = cloudinary.url(file.publicId, {
-        resource_type: file.resourceType || "raw",
-        secure: true,
+        resource_type: resourceType,
+        flags:         "inline",
+        secure:        true,
       });
       return res.redirect(viewUrl);
     }
@@ -247,19 +246,8 @@ async function serveNoteFile(req, res, shouldDownload) {
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Unable to open file",
-    });
+    return res.status(500).json({ success: false, message: "Unable to open file" });
   }
-}
-
-function getCloudinaryDownloadUrl(file) {
-  return cloudinary.url(file.publicId, {
-    resource_type: file.resourceType || "raw",
-    flags: "attachment",
-    secure: true,
-  });
 }
 
 module.exports = {
