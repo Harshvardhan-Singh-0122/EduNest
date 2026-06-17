@@ -1,3 +1,8 @@
+// FIX: This page now shows ALL users' notes (renamed conceptually to
+// "All Notes"), not just the logged-in user's own notes.
+// The user still needs to be logged in to view this page (session check
+// stays), but the notes fetched are now public — from every account.
+
 window.onload = function () {
   const token = localStorage.getItem("token");
 
@@ -20,7 +25,11 @@ window.onload = function () {
       document.getElementById("profile-fullname").innerText = data.user.firstName;
       document.getElementById("profile-universityName").innerText = data.user.university;
 
-      fetchMyNotes(token);
+      // FIX: store current user's id so we can mark "your" notes
+      // differently in the list if needed, without restricting the fetch
+      window.currentUserId = data.user._id;
+
+      fetchAllNotes();
     })
     .catch(() => {
       localStorage.removeItem("token");
@@ -28,13 +37,15 @@ window.onload = function () {
     });
 };
 
-function fetchMyNotes(token) {
+// FIX: renamed from fetchMyNotes() and now calls the PUBLIC /api/notes
+// endpoint instead of the personal /api/notes/my endpoint. This endpoint
+// requires no auth and already correctly returns notes from every user
+// (confirmed working — Demo's and John's notes both appear here).
+function fetchAllNotes() {
   const container = document.getElementById("myNotesContainer");
-  container.innerHTML = `<p style="color:#7f8c8d;">Loading your notes...</p>`;
+  container.innerHTML = `<p style="color:#7f8c8d;">Loading notes...</p>`;
 
-  fetch("/api/notes/my", {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  fetch("/api/notes")
     .then((res) => res.json())
     .then((data) => {
       if (!data.success || !data.notes) {
@@ -43,7 +54,7 @@ function fetchMyNotes(token) {
       }
 
       if (data.notes.length === 0) {
-        container.innerHTML = `<p style="color:#7f8c8d;">You haven't uploaded any notes yet.</p>`;
+        container.innerHTML = `<p style="color:#7f8c8d;">No notes have been uploaded yet.</p>`;
         return;
       }
 
@@ -51,12 +62,22 @@ function fetchMyNotes(token) {
       data.notes.forEach((note) => {
         const noteCard = document.createElement("div");
         noteCard.classList.add("note-card");
+
+        // FIX: show the uploader's name on every card since this is now
+        // a shared feed, not a personal list — otherwise it's unclear
+        // who uploaded each note
+        const uploaderName = getUploaderName(note.userId);
+        const isOwnNote = window.currentUserId && note.userId?._id === window.currentUserId;
+
         noteCard.innerHTML = `
           <div class="note-title">${escapeHtml(note.title)}</div>
           <div class="note-meta">
             <span class="note-subject">${escapeHtml(note.subject)}</span>
             <span>${new Date(note.uploadAt).toLocaleDateString()}</span>
           </div>
+          <p style="margin-top:0.5rem;color:#5f6f7d;font-size:0.85rem;">
+            ${isOwnNote ? "📌 Uploaded by you" : `👤 Uploaded by ${escapeHtml(uploaderName)}`}
+          </p>
           <p style="margin-top:0.75rem;color:#5f6f7d;">${escapeHtml(note.description)}</p>
           <div class="note-stats">
             <div class="note-stat">${note.downloads || 0} downloads</div>
@@ -74,6 +95,11 @@ function fetchMyNotes(token) {
     .catch(() => {
       container.innerHTML = `<p style="color:red;">Failed to load notes</p>`;
     });
+}
+
+function getUploaderName(user) {
+  if (!user) return "EduNest user";
+  return user.fullName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "EduNest user";
 }
 
 function renderFirstDownload(note) {

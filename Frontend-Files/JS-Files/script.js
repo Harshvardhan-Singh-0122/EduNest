@@ -1,268 +1,227 @@
- // Search functionality
-        function performSearch() {
-            const searchInput = document.getElementById('searchInput');
-            const query = searchInput.value.trim();
-            
-            if (query) {
-                // Add search animation
-                searchInput.style.transform = 'scale(1.02)';
-                setTimeout(() => {
-                    searchInput.style.transform = 'scale(1)';
-                }, 200);
-                
-                // Here you would typically redirect to search results
-                console.log('Searching for:', query);
-                alert(`Searching for: "${query}"\n\nThis will redirect to search results page when backend is connected.`);
-            } else {
-                searchInput.focus();
-            }
+// ─── Search functionality ──────────────────────────────────────────────────
+function performSearch() {
+    const searchInput = document.getElementById('searchInput');
+    const query = searchInput.value.trim();
+
+    if (query) {
+        searchInput.style.transform = 'scale(1.02)';
+        setTimeout(() => {
+            searchInput.style.transform = 'scale(1)';
+        }, 200);
+
+        // FIX: navigate to the real search page instead of showing an alert
+        window.location.href = '/Search?q=' + encodeURIComponent(query);
+    } else {
+        searchInput.focus();
+    }
+}
+
+function setSearch(term) {
+    const searchInput = document.getElementById('searchInput');
+    searchInput.value = term;
+    searchInput.focus();
+}
+
+document.getElementById('searchInput').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+        performSearch();
+    }
+});
+
+// ─── Animated counter for stats ────────────────────────────────────────────
+function animateCounter(element, target, duration = 2000) {
+    let start = 0;
+    const increment = target / (duration / 16);
+    const timer = setInterval(() => {
+        start += increment;
+        if (start >= target) {
+            element.textContent = target;
+            clearInterval(timer);
+        } else {
+            element.textContent = Math.floor(start);
         }
+    }, 16);
+}
 
-        // Set search from tags
-        function setSearch(term) {
-            const searchInput = document.getElementById('searchInput');
-            searchInput.value = term;
-            searchInput.focus();
-        }
+// FIX: stats are now calculated from real data once notes are fetched,
+// instead of always showing hardcoded fake numbers (1247, 89, etc.)
+function animateRealStats(notes) {
+    const totalDownloads = notes.reduce((sum, n) => sum + (n.downloads || 0), 0);
+    const uniqueUploaders = new Set(notes.map((n) => n.userId?._id).filter(Boolean));
+    const uniqueSubjects  = new Set(notes.map((n) => n.subject).filter(Boolean));
 
-        // Enter key search
-        document.getElementById('searchInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                performSearch();
-            }
-        });
+    animateCounter(document.getElementById('notesCount'), notes.length);
+    animateCounter(document.getElementById('studentsCount'), uniqueUploaders.size);
+    animateCounter(document.getElementById('subjectsCount'), uniqueSubjects.size);
+    animateCounter(document.getElementById('downloadsCount'), totalDownloads);
+}
 
-        // Animated counter for stats
-        function animateCounter(element, target, duration = 2000) {
-            let start = 0;
-            const increment = target / (duration / 16);
-            const timer = setInterval(() => {
-                start += increment;
-                if (start >= target) {
-                    element.textContent = target;
-                    clearInterval(timer);
-                } else {
-                    element.textContent = Math.floor(start);
-                }
-            }, 16);
-        }
+// ─── Mobile menu toggle ─────────────────────────────────────────────────────
+function toggleMobileMenu() {
+    const navAuth = document.querySelector('.nav-auth');
+    if (navAuth.style.display === 'flex') {
+        navAuth.style.display = 'none';
+    } else {
+        navAuth.style.display = 'flex';
+        navAuth.style.position = 'absolute';
+        navAuth.style.top = '100%';
+        navAuth.style.right = '2rem';
+        navAuth.style.background = 'white';
+        navAuth.style.padding = '1rem';
+        navAuth.style.borderRadius = '8px';
+        navAuth.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)';
+        navAuth.style.border = '1px solid #e5e5e5';
+    }
+}
 
-        // Intersection Observer for stats animation
-        const statsObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    animateCounter(document.getElementById('notesCount'), 1247);
-                    animateCounter(document.getElementById('studentsCount'), 89);
-                    animateCounter(document.getElementById('subjectsCount'), 15);
-                    animateCounter(document.getElementById('downloadsCount'), 3420);
-                    statsObserver.unobserve(entry.target);
-                }
-            });
-        });
+// Auto-focus search on page load
+window.addEventListener('load', function () {
+    setTimeout(() => {
+        document.getElementById('searchInput').focus();
+    }, 500);
+});
 
-        statsObserver.observe(document.querySelector('.stats'));
+// ─── Popular Notes Section — now backed by REAL data ───────────────────────
+// FIX: removed the entire hardcoded mockNotes array. This was the root
+// cause of John never seeing Demo's notes (and vice versa) — the homepage
+// never actually asked the server for real notes, so no uploaded note
+// from ANY account could ever appear here.
 
-        // Mobile menu toggle
-        function toggleMobileMenu() {
-            const navAuth = document.querySelector('.nav-auth');
-            if (navAuth.style.display === 'flex') {
-                navAuth.style.display = 'none';
-            } else {
-                navAuth.style.display = 'flex';
-                navAuth.style.position = 'absolute';
-                navAuth.style.top = '100%';
-                navAuth.style.right = '2rem';
-                navAuth.style.background = 'white';
-                navAuth.style.padding = '1rem';
-                navAuth.style.borderRadius = '8px';
-                navAuth.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)';
-                navAuth.style.border = '1px solid #e5e5e5';
-            }
-        }
+let allNotes = [];
+let currentNotesCount = 0;
+const notesPerLoad = 3;
 
-        // Auto-focus search on page load
-        window.addEventListener('load', function() {
-            setTimeout(() => {
-                document.getElementById('searchInput').focus();
-            }, 500);
-        });
+function createNoteCard(note) {
+    const rating = note.rating || 4.5; // real notes don't have ratings yet — default shown
+    const stars = '★'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
+    const uploaderName = note.userId?.fullName || 'EduNest user';
+    const fileType = note.files && note.files.length > 0 ? 'PDF' : 'No file';
 
-
-        //Popular Notes Section
-
-        const mockNotes = [
-            {
-                id: 1,
-                title: "Introduction to Calculus - Complete Chapter Notes",
-                subject: "Mathematics",
-                uploader: "Alex Johnson",
-                uploadDate: "2024-01-15",
-                downloads: 245,
-                rating: 4.8,
-                fileType: "PDF",
-                isTrending: true
-            },
-            {
-                id: 2,
-                title: "Organic Chemistry Lab Manual with Solutions",
-                subject: "Chemistry",
-                uploader: "Sarah Chen",
-                uploadDate: "2024-01-12",
-                downloads: 189,
-                rating: 4.6,
-                fileType: "PDF",
-                isTrending: false
-            },
-            {
-                id: 3,
-                title: "Physics - Quantum Mechanics Summary",
-                subject: "Physics",
-                uploader: "Michael Brown",
-                uploadDate: "2024-01-10",
-                downloads: 167,
-                rating: 4.9,
-                fileType: "DOC",
-                isTrending: true
-            },
-            {
-                id: 4,
-                title: "Data Structures and Algorithms - Interview Prep",
-                subject: "Computer Science",
-                uploader: "Emma Davis",
-                uploadDate: "2024-01-08",
-                downloads: 298,
-                rating: 4.7,
-                fileType: "PDF",
-                isTrending: false
-            },
-            {
-                id: 5,
-                title: "Biology - Cell Structure and Function",
-                subject: "Biology",
-                uploader: "Ryan Wilson",
-                uploadDate: "2024-01-05",
-                downloads: 134,
-                rating: 4.5,
-                fileType: "PPT",
-                isTrending: false
-            },
-            {
-                id: 6,
-                title: "Economics - Microeconomics Principles",
-                subject: "Economics",
-                uploader: "Lisa Garcia",
-                uploadDate: "2024-01-03",
-                downloads: 156,
-                rating: 4.4,
-                fileType: "PDF",
-                isTrending: false
-            }
-        ];
-
-        let currentNotesCount = 0;
-        const notesPerLoad = 3;
-
-        function createNoteCard(note) {
-            const stars = '★'.repeat(Math.floor(note.rating)) + '☆'.repeat(5 - Math.floor(note.rating));
-            
-            return `
-                <div class="note-card" onclick="viewNote(${note.id})">
-                    ${note.isTrending ? '<div class="trending-badge">Trending</div>' : ''}
-                    <div class="file-type">${note.fileType}</div>
-                    <div class="note-header">
-                        <div class="note-subject">${note.subject}</div>
-                        <h3 class="note-title">${note.title}</h3>
+    return `
+        <div class="note-card" onclick="viewNote('${note._id}')">
+            <div class="file-type">${fileType}</div>
+            <div class="note-header">
+                <div class="note-subject">${escapeHtml(note.subject)}</div>
+                <h3 class="note-title">${escapeHtml(note.title)}</h3>
+            </div>
+            <div class="note-meta">
+                <div class="note-stats">
+                    <div class="stat-item">
+                        <span>📥</span>
+                        <span>${note.downloads || 0}</span>
                     </div>
-                    <div class="note-meta">
-                        <div class="note-stats">
-                            <div class="stat-item">
-                                <span>📥</span>
-                                <span>${note.downloads}</span>
-                            </div>
-                            <div class="rating">
-                                <span class="stars">${stars}</span>
-                                <span>${note.rating}</span>
-                            </div>
-                        </div>
-                        <div class="note-author">
-                            by ${note.uploader}
-                        </div>
+                    <div class="rating">
+                        <span class="stars">${stars}</span>
+                        <span>${rating}</span>
                     </div>
                 </div>
-            `;
-        }
+                <div class="note-author">
+                    by ${escapeHtml(uploaderName)}
+                </div>
+            </div>
+        </div>
+    `;
+}
 
-        function loadMoreNotes() {
-            const loading = document.getElementById('loading');
-            const loadMoreBtn = document.getElementById('loadMoreBtn');
-            const notesGrid = document.getElementById('notesGrid');
+// FIX: fetches real notes from /api/notes (public route, no auth needed,
+// returns ALL users' notes — confirmed working correctly on the backend)
+function loadMoreNotes() {
+    const loading = document.getElementById('loading');
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    const notesGrid = document.getElementById('notesGrid');
 
-            // Show loading state
-            loading.classList.remove('hidden');
-            loadMoreBtn.style.display = 'none';
+    loading.classList.remove('hidden');
+    loadMoreBtn.style.display = 'none';
 
-            // Simulate API call delay
-            setTimeout(() => {
-                const notesToShow = mockNotes.slice(currentNotesCount, currentNotesCount + notesPerLoad);
-                
-                notesToShow.forEach(note => {
-                    const noteCard = createNoteCard(note);
-                    notesGrid.innerHTML += noteCard;
-                });
-
-                currentNotesCount += notesPerLoad;
-
-                // Hide loading state
-                loading.classList.add('hidden');
-                
-                // Show load more button if there are more notes
-                if (currentNotesCount < mockNotes.length) {
-                    loadMoreBtn.style.display = 'inline-block';
-                } else {
-                    loadMoreBtn.innerHTML = 'No more notes to load';
-                    loadMoreBtn.disabled = true;
-                    loadMoreBtn.style.opacity = '0.5';
+    // Only fetch from the server once; subsequent "load more" clicks
+    // just reveal more of the already-fetched list
+    if (allNotes.length === 0 && currentNotesCount === 0) {
+        fetch('/api/notes')
+            .then((res) => res.json())
+            .then((data) => {
+                if (!data.success) {
+                    notesGrid.innerHTML = '<p>Could not load notes right now.</p>';
+                    loading.classList.add('hidden');
+                    return;
                 }
-            }, 1000);
-        }
 
-        function viewNote(noteId) {
-            const note = mockNotes.find(n => n.id === noteId);
-            if (note) {
-                // Add click animation
-                event.currentTarget.style.transform = 'scale(0.98)';
-                setTimeout(() => {
-                    event.currentTarget.style.transform = 'translateY(-5px)';
-                }, 100);
-
-                // In a real app, this would navigate to the note detail page
-                alert(`Opening note: "${note.title}"\n\nThis would open the note details page when the backend is connected.`);
-            }
-        }
-
-        // Initialize the section with first batch of notes
-        document.addEventListener('DOMContentLoaded', function() {
-            loadMoreNotes();
-        });
-
-        // Add hover effect for note cards
-        document.addEventListener('DOMContentLoaded', function() {
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.style.opacity = '1';
-                        entry.target.style.transform = 'translateY(0)';
-                    }
-                });
+                allNotes = data.notes;
+                animateRealStats(allNotes);
+                renderNextBatch();
+            })
+            .catch(() => {
+                notesGrid.innerHTML = '<p>Could not load notes right now.</p>';
+                loading.classList.add('hidden');
             });
+    } else {
+        renderNextBatch();
+    }
+}
 
-            // Observe all note cards for animation
-            setTimeout(() => {
-                document.querySelectorAll('.note-card').forEach(card => {
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateY(20px)';
-                    card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-                    observer.observe(card);
-                });
-            }, 100);
+function renderNextBatch() {
+    const loading = document.getElementById('loading');
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    const notesGrid = document.getElementById('notesGrid');
+
+    setTimeout(() => {
+        const notesToShow = allNotes.slice(currentNotesCount, currentNotesCount + notesPerLoad);
+
+        if (notesToShow.length === 0 && currentNotesCount === 0) {
+            notesGrid.innerHTML = '<p>No notes have been uploaded yet. Be the first!</p>';
+        } else {
+            notesToShow.forEach((note) => {
+                notesGrid.innerHTML += createNoteCard(note);
+            });
+        }
+
+        currentNotesCount += notesPerLoad;
+        loading.classList.add('hidden');
+
+        if (currentNotesCount < allNotes.length) {
+            loadMoreBtn.style.display = 'inline-block';
+        } else {
+            loadMoreBtn.innerHTML = 'No more notes to load';
+            loadMoreBtn.disabled = true;
+            loadMoreBtn.style.opacity = '0.5';
+        }
+    }, 400);
+}
+
+// FIX: navigates to the real note detail page instead of showing an alert
+function viewNote(noteId) {
+    window.location.href = '/notes/' + noteId;
+}
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+    loadMoreNotes();
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
         });
+    });
+
+    setTimeout(() => {
+        document.querySelectorAll('.note-card').forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(card);
+        });
+    }, 100);
+});

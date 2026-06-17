@@ -21,21 +21,22 @@ const uploadNotes = async (req, res) => {
     }
 
     const processedFiles = req.files.map((file) => {
+      // DEBUG: log the entire raw file object Multer + Cloudinary gives us
+      console.log("[DEBUG] ---- RAW MULTER FILE OBJECT ----");
+      console.log(JSON.stringify(file, null, 2));
+      console.log("[DEBUG] ---------------------------------");
+
       const publicId = file.public_id || file.filename;
-      const fileUrl  = file.secure_url || file.url || null;
+      const fileUrl  = file.secure_url || file.url || file.path || null;
 
       return {
         originalName: file.originalname,
         storedName:   file.filename,
         fileType:     file.mimetype,
         fileSize:     file.size || file.bytes || 0,
-        filePath:     file.path || undefined,
-        fileUrl:      fileUrl   || undefined,
+        filePath:     file.path     || undefined,
+        fileUrl:      fileUrl       || undefined,
         publicId,
-        // FIX: store as "image" to match the new multer config.
-        // This ensures view/download URLs are built with the correct
-        // resource_type so Cloudinary returns the file with the right
-        // Content-Type header (application/pdf, not octet-stream).
         resourceType: "image",
       };
     });
@@ -57,9 +58,9 @@ const uploadNotes = async (req, res) => {
       success:    true,
       message:    "File Uploaded!",
       filesCount: processedFiles.length,
-      files: processedFiles.map((file) => ({
-        fileName: file.originalName,
-        fileSize: file.fileSize,
+      files: processedFiles.map((f) => ({
+        fileName: f.originalName,
+        fileSize: f.fileSize,
       })),
     });
   } catch (err) {
@@ -94,9 +95,9 @@ const uploadFormDetail = async (req, res) => {
     await newNotes.save();
 
     res.json({
-      success:      true,
-      message:      "Note added to DB",
-      notesDetail:  newNotes,
+      success:     true,
+      message:     "Note added to DB",
+      notesDetail: newNotes,
     });
   } catch (err) {
     console.error("uploadFormDetail error:", err);
@@ -106,7 +107,7 @@ const uploadFormDetail = async (req, res) => {
 
 const getAllNotes = async (req, res) => {
   try {
-    const { q } = req.query;
+    const { q }  = req.query;
     const query  = {};
 
     if (q) {
@@ -138,33 +139,21 @@ const getNoteById = async (req, res) => {
     );
 
     if (!note) {
-      return res.status(404).json({
-        success: false,
-        message: "Note not found",
-      });
+      return res.status(404).json({ success: false, message: "Note not found" });
     }
 
     res.json({ success: true, note });
   } catch (error) {
-    // FIX: only return 400 for invalid ObjectId, not for all errors
     if (error.name === "CastError") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid note id",
-      });
+      return res.status(400).json({ success: false, message: "Invalid note id" });
     }
     console.error(error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-const viewNoteFile = async (req, res) => {
-  serveNoteFile(req, res, false);
-};
-
-const downloadNoteFile = async (req, res) => {
-  serveNoteFile(req, res, true);
-};
+const viewNoteFile    = (req, res) => serveNoteFile(req, res, false);
+const downloadNoteFile = (req, res) => serveNoteFile(req, res, true);
 
 const getUserNotes = async (req, res) => {
   try {
@@ -181,73 +170,92 @@ const getUserNotes = async (req, res) => {
 
 function parseTags(tags) {
   if (!tags) return [];
-  return tags.split(",").map((tag) => tag.trim()).filter(Boolean);
+  return tags.split(",").map((t) => t.trim()).filter(Boolean);
 }
 
+// ─── Core fix: build correct Cloudinary URLs for PDF view and download ────────
 async function serveNoteFile(req, res, shouldDownload) {
   try {
     const note = await Notes.findById(req.params.id);
-
     if (!note) {
       return res.status(404).json({ success: false, message: "Note not found" });
     }
 
     const file = note.files.id(req.params.fileId);
-
     if (!file) {
       return res.status(404).json({ success: false, message: "File not found" });
     }
 
-    // FIX: always use "image" resource_type for PDFs stored after this fix.
-    // Falls back to whatever is stored in file.resourceType for old records.
-    const resourceType = file.resourceType || "image";
-
     if (shouldDownload) {
       note.downloads += 1;
       await note.save();
+    }
 
-      if (file.publicId) {
-        const downloadUrl = cloudinary.url(file.publicId, {
-          resource_type: resourceType,
-          // "attachment" flag tells Cloudinary to set
-          // Content-Disposition: attachment so browser downloads the file
-          flags:         "attachment",
-          secure:        true,
-        });
+    // DEBUG: log everything about this file so we can see exactly
+    // what is stored in MongoDB vs what URL we are about to redirect to
+    console.log("[DEBUG] ---- serveNoteFile ----");
+    console.log("[DEBUG] shouldDownload:", shouldDownload);
+    console.log("[DEBUG] file.fileUrl (raw from DB):", file.fileUrl);
+    console.log("[DEBUG] file.publicId:", file.publicId);
+    console.log("[DEBUG] file.resourceType:", file.resourceType);
+    console.log("[DEBUG] file.originalName:", file.originalName);
+
+    if (file.fileUrl) {
+      if (shouldDownload) {
+        // fl_attachment works as a standalone flag and forces download
+        const downloadUrl = buildTransformedUrl(file.fileUrl, "fl_attachment");
+        console.log("[DEBUG] Final redirect URL:", downloadUrl);
         return res.redirect(downloadUrl);
       }
 
-      return res.status(404).json({
-        success: false,
-        message: "File not available for download",
-      });
-    }
-
-    // View (inline)
-    if (file.fileUrl) {
+      // FIX: fl_inline is not a valid standalone flag for PDFs and
+      // returns 400 Bad Request on its own. PDFs are served inline
+      // by Cloudinary by default (no Content-Disposition header at all),
+      // so for preview we just redirect to the plain stored URL —
+      // no flag needed.
+      console.log("[DEBUG] Final redirect URL (plain, no flag):", file.fileUrl);
       return res.redirect(file.fileUrl);
     }
 
+    // Fallback: if fileUrl was not stored (very old records),
+    // build URL manually from publicId
     if (file.publicId) {
-      // FIX: for inline PDF viewing, we need fl_inline so the browser
-      // opens it instead of downloading, and resource_type: image
-      // so Cloudinary serves it with Content-Type: application/pdf
-      const viewUrl = cloudinary.url(file.publicId, {
+      const resourceType = file.resourceType || "image";
+      const flag         = shouldDownload ? "attachment" : "inline";
+
+      const url = cloudinary.url(file.publicId, {
         resource_type: resourceType,
-        flags:         "inline",
+        flags:         flag,
+        format:        "pdf",
         secure:        true,
       });
-      return res.redirect(viewUrl);
+      return res.redirect(url);
     }
 
     return res.status(404).json({
       success: false,
-      message: "File not available for viewing",
+      message: "File URL not available",
     });
+
   } catch (error) {
-    console.error(error);
+    console.error("serveNoteFile error:", error);
     return res.status(500).json({ success: false, message: "Unable to open file" });
   }
+}
+
+// ─── Helper: insert a Cloudinary transformation flag into an existing URL ─────
+// Cloudinary URLs look like:
+//   https://res.cloudinary.com/cloud/image/upload/v123456/folder/file.pdf
+// We need to insert the flag AFTER "/upload/" so it becomes:
+//   https://res.cloudinary.com/cloud/image/upload/fl_inline/v123456/folder/file.pdf
+function buildTransformedUrl(originalUrl, flag) {
+  // Split on "/upload/" and insert the flag in between
+  const parts = originalUrl.split("/upload/");
+  if (parts.length !== 2) {
+    // URL format unexpected — return original as fallback
+    return originalUrl;
+  }
+  return `${parts[0]}/upload/${flag}/${parts[1]}`;
 }
 
 module.exports = {
