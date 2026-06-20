@@ -1,18 +1,22 @@
 const cloudinary = require("../config/cloudinary");
 const Notes      = require("../models/notes");
 
+// ── helper: does this user have access to a private note? ──────────────────
+function hasAccess(note, userId) {
+  if (note.visibility !== "private") return true;
+  if (!userId) return false;
+  if (String(note.userId._id || note.userId) === String(userId)) return true;
+  return note.allowedUsers.some((id) => String(id) === String(userId));
+}
+
 // Upload notes file info
 const uploadNotes = async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No files uploaded",
-      });
+      return res.status(400).json({ success: false, message: "No files uploaded" });
     }
 
     const noteId = req.body.noteId;
-
     if (!noteId) {
       return res.status(400).json({
         success: false,
@@ -21,11 +25,6 @@ const uploadNotes = async (req, res) => {
     }
 
     const processedFiles = req.files.map((file) => {
-      // DEBUG: log the entire raw file object Multer + Cloudinary gives us
-      console.log("[DEBUG] ---- RAW MULTER FILE OBJECT ----");
-      console.log(JSON.stringify(file, null, 2));
-      console.log("[DEBUG] ---------------------------------");
-
       const publicId = file.public_id || file.filename;
       const fileUrl  = file.secure_url || file.url || file.path || null;
 
@@ -34,8 +33,8 @@ const uploadNotes = async (req, res) => {
         storedName:   file.filename,
         fileType:     file.mimetype,
         fileSize:     file.size || file.bytes || 0,
-        filePath:     file.path     || undefined,
-        fileUrl:      fileUrl       || undefined,
+        filePath:     file.path || undefined,
+        fileUrl:      fileUrl   || undefined,
         publicId,
         resourceType: "image",
       };
@@ -48,20 +47,14 @@ const uploadNotes = async (req, res) => {
     );
 
     if (!note) {
-      return res.status(404).json({
-        success: false,
-        message: "Note not found for this user",
-      });
+      return res.status(404).json({ success: false, message: "Note not found for this user" });
     }
 
     res.json({
       success:    true,
       message:    "File Uploaded!",
       filesCount: processedFiles.length,
-      files: processedFiles.map((f) => ({
-        fileName: f.originalName,
-        fileSize: f.fileSize,
-      })),
+      files: processedFiles.map((f) => ({ fileName: f.originalName, fileSize: f.fileSize })),
     });
   } catch (err) {
     console.error("uploadNotes error:", err);
@@ -75,14 +68,12 @@ const uploadFormDetail = async (req, res) => {
     const {
       noteTitle, branch, subject, semester,
       university, course, description, tags,
+      visibility, // FIX: accept visibility at creation time
     } = req.body;
 
     if (!noteTitle || !branch || !subject || !semester ||
         !university || !course || !description) {
-      return res.status(400).json({
-        success: false,
-        message: "Please fill all details",
-      });
+      return res.status(400).json({ success: false, message: "Please fill all details" });
     }
 
     const newNotes = new Notes({
@@ -90,24 +81,24 @@ const uploadFormDetail = async (req, res) => {
       title:       noteTitle,
       branch, subject, semester, university, course, description,
       tags:        parseTags(tags),
+      visibility:  visibility === "private" ? "private" : "public",
     });
 
     await newNotes.save();
 
-    res.json({
-      success:     true,
-      message:     "Note added to DB",
-      notesDetail: newNotes,
-    });
+    res.json({ success: true, message: "Note added to DB", notesDetail: newNotes });
   } catch (err) {
     console.error("uploadFormDetail error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
+// FIX: getAllNotes now excludes private notes the requesting user
+// can't see. Public notes always show. Private notes only show if the
+// logged-in user is the owner or is in allowedUsers.
 const getAllNotes = async (req, res) => {
   try {
-    const { q }  = req.query;
+    const { q } = req.query;
     const query  = {};
 
     if (q) {
@@ -125,13 +116,45 @@ const getAllNotes = async (req, res) => {
       .populate("userId", "firstName lastName fullName university")
       .sort({ uploadAt: -1 });
 
-    res.json({ success: true, notes });
+    const currentUserId = req.user?.userId;
+
+    // FIX: never remove private notes from the list — instead mark
+    // each one as locked or unlocked based on whether the current
+    // viewer has access. Removing them entirely was the bug: Account B
+    // never saw Account A's private notes at all, and a subtle access
+    // check failure could even hide the owner's own notes from them.
+    const notesWithFlag = notes.map((note) => {
+      const obj = note.toObject();
+
+      const isOwner = currentUserId && String(note.userId?._id) === String(currentUserId);
+      const isAllowed = currentUserId && note.allowedUsers.some(
+        (id) => String(id) === String(currentUserId)
+      );
+
+      if (note.visibility === "private" && !isOwner && !isAllowed) {
+        obj.isLocked = true;
+        // Strip sensitive fields from locked notes so the frontend
+        // can't accidentally render files/description for someone
+        // without access, even if it forgets to check isLocked
+        obj.files = [];
+        obj.description = undefined;
+        obj.tags = [];
+      } else {
+        obj.isLocked = false;
+      }
+
+      return obj;
+    });
+
+    res.json({ success: true, notes: notesWithFlag });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
+// FIX: private notes now return a locked preview (title, subject, owner)
+// instead of full data + files, unless the requester has access
 const getNoteById = async (req, res) => {
   try {
     const note = await Notes.findById(req.params.id).populate(
@@ -142,7 +165,33 @@ const getNoteById = async (req, res) => {
       return res.status(404).json({ success: false, message: "Note not found" });
     }
 
-    res.json({ success: true, note });
+    const currentUserId = req.user?.userId;
+
+    // DEBUG: trace exactly what we're comparing for access decisions
+    console.log("[DEBUG] getNoteById -- currentUserId:", currentUserId);
+    console.log("[DEBUG] getNoteById -- note.userId._id:", note.userId?._id?.toString());
+    console.log("[DEBUG] getNoteById -- note.visibility:", note.visibility);
+    console.log("[DEBUG] getNoteById -- hasAccess result:", hasAccess(note, currentUserId));
+
+    if (note.visibility === "private" && !hasAccess(note, currentUserId)) {
+      return res.json({
+        success: true,
+        note: {
+          _id:        note._id,
+          title:      note.title,
+          subject:    note.subject,
+          branch:     note.branch,
+          university: note.university,
+          userId:     note.userId,
+          visibility: "private",
+          isLocked:   true,
+        },
+      });
+    }
+
+    const noteObj = note.toObject();
+    noteObj.isLocked = false;
+    res.json({ success: true, note: noteObj });
   } catch (error) {
     if (error.name === "CastError") {
       return res.status(400).json({ success: false, message: "Invalid note id" });
@@ -152,7 +201,7 @@ const getNoteById = async (req, res) => {
   }
 };
 
-const viewNoteFile    = (req, res) => serveNoteFile(req, res, false);
+const viewNoteFile     = (req, res) => serveNoteFile(req, res, false);
 const downloadNoteFile = (req, res) => serveNoteFile(req, res, true);
 
 const getUserNotes = async (req, res) => {
@@ -173,12 +222,22 @@ function parseTags(tags) {
   return tags.split(",").map((t) => t.trim()).filter(Boolean);
 }
 
-// ─── Core fix: build correct Cloudinary URLs for PDF view and download ────────
+// FIX: serveNoteFile now blocks view/download for private notes
+// unless the requester is the owner or in allowedUsers
 async function serveNoteFile(req, res, shouldDownload) {
   try {
     const note = await Notes.findById(req.params.id);
     if (!note) {
       return res.status(404).json({ success: false, message: "Note not found" });
+    }
+
+    const currentUserId = req.user?.userId;
+
+    if (note.visibility === "private" && !hasAccess(note, currentUserId)) {
+      return res.status(403).json({
+        success: false,
+        message: "This note is private. Request access from the owner first.",
+      });
     }
 
     const file = note.files.id(req.params.fileId);
@@ -191,70 +250,36 @@ async function serveNoteFile(req, res, shouldDownload) {
       await note.save();
     }
 
-    // DEBUG: log everything about this file so we can see exactly
-    // what is stored in MongoDB vs what URL we are about to redirect to
-    console.log("[DEBUG] ---- serveNoteFile ----");
-    console.log("[DEBUG] shouldDownload:", shouldDownload);
-    console.log("[DEBUG] file.fileUrl (raw from DB):", file.fileUrl);
-    console.log("[DEBUG] file.publicId:", file.publicId);
-    console.log("[DEBUG] file.resourceType:", file.resourceType);
-    console.log("[DEBUG] file.originalName:", file.originalName);
-
     if (file.fileUrl) {
       if (shouldDownload) {
-        // fl_attachment works as a standalone flag and forces download
         const downloadUrl = buildTransformedUrl(file.fileUrl, "fl_attachment");
-        console.log("[DEBUG] Final redirect URL:", downloadUrl);
         return res.redirect(downloadUrl);
       }
-
-      // FIX: fl_inline is not a valid standalone flag for PDFs and
-      // returns 400 Bad Request on its own. PDFs are served inline
-      // by Cloudinary by default (no Content-Disposition header at all),
-      // so for preview we just redirect to the plain stored URL —
-      // no flag needed.
-      console.log("[DEBUG] Final redirect URL (plain, no flag):", file.fileUrl);
       return res.redirect(file.fileUrl);
     }
 
-    // Fallback: if fileUrl was not stored (very old records),
-    // build URL manually from publicId
     if (file.publicId) {
       const resourceType = file.resourceType || "image";
-      const flag         = shouldDownload ? "attachment" : "inline";
-
+      const flag = shouldDownload ? "attachment" : "inline";
       const url = cloudinary.url(file.publicId, {
         resource_type: resourceType,
-        flags:         flag,
-        format:        "pdf",
-        secure:        true,
+        flags: flag,
+        format: "pdf",
+        secure: true,
       });
       return res.redirect(url);
     }
 
-    return res.status(404).json({
-      success: false,
-      message: "File URL not available",
-    });
-
+    return res.status(404).json({ success: false, message: "File URL not available" });
   } catch (error) {
     console.error("serveNoteFile error:", error);
     return res.status(500).json({ success: false, message: "Unable to open file" });
   }
 }
 
-// ─── Helper: insert a Cloudinary transformation flag into an existing URL ─────
-// Cloudinary URLs look like:
-//   https://res.cloudinary.com/cloud/image/upload/v123456/folder/file.pdf
-// We need to insert the flag AFTER "/upload/" so it becomes:
-//   https://res.cloudinary.com/cloud/image/upload/fl_inline/v123456/folder/file.pdf
 function buildTransformedUrl(originalUrl, flag) {
-  // Split on "/upload/" and insert the flag in between
   const parts = originalUrl.split("/upload/");
-  if (parts.length !== 2) {
-    // URL format unexpected — return original as fallback
-    return originalUrl;
-  }
+  if (parts.length !== 2) return originalUrl;
   return `${parts[0]}/upload/${flag}/${parts[1]}`;
 }
 

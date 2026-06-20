@@ -84,36 +84,22 @@ document.addEventListener("DOMContentLoaded", function () {
     headers: {
       Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
-    // DEBUG: Temporarily removed strict MIME check — only checking extension
-    // so we can confirm whether MIME type mismatch was blocking uploads
     accept: function (file, done) {
-      console.log("[DEBUG] File added to Dropzone:", file.name);
-      console.log("[DEBUG] File MIME type:", file.type);
-      console.log("[DEBUG] File size:", file.size);
-
       const isDuplicate = this.files.some(
         (f) => f !== file && f.name === file.name
       );
-
       if (isDuplicate) {
-        console.warn("[DEBUG] Rejected — duplicate filename:", file.name);
         done("This file has already been added.");
         return;
       }
-
       const hasValidExt = file.name.toLowerCase().endsWith(".pdf");
       if (!hasValidExt) {
-        console.warn("[DEBUG] Rejected — not a PDF extension:", file.name);
         done("Only PDF files are allowed.");
         return;
       }
-
-      console.log("[DEBUG] File accepted:", file.name);
       done();
     },
   });
-
-  console.log("[DEBUG] Dropzone initialized on #uploadArea");
 
   if (!uploadElement.querySelector(".dz-message")) {
     uploadElement.innerHTML = `
@@ -126,7 +112,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // ── Dropzone events ─────────────────────────────────────────────────────────
   myDropzone.on("addedfile", function (file) {
-    console.log("[DEBUG] addedfile event fired:", file.name, "| status:", file.status);
     filesGrid.insertAdjacentHTML("beforeend", createFileCard(file));
     filePreviewContainer.style.display = "block";
     uploadBtn.disabled = false;
@@ -139,7 +124,6 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   myDropzone.on("removedfile", function (file) {
-    console.log("[DEBUG] removedfile event fired:", file.name);
     const card = findFileCard(file.name);
     if (card) card.remove();
     if (myDropzone.files.length === 0) {
@@ -148,23 +132,11 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  myDropzone.on("sending", function (file, xhr, formData) {
-    console.log("[DEBUG] sending event fired for:", file.name);
-    console.log("[DEBUG] Request URL:", xhr.responseURL || myDropzone.options.url);
-  });
-
-  myDropzone.on("success", function (file, response) {
-    console.log("[DEBUG] success event fired:", file.name);
-    console.log("[DEBUG] Server response:", response);
+  myDropzone.on("success", function (file) {
     addUploadResult(`${file.name} - Uploaded successfully`, "success");
   });
 
-  myDropzone.on("error", function (file, errorMessage, xhr) {
-    console.error("[DEBUG] error event fired:", file.name);
-    console.error("[DEBUG] Error message:", errorMessage);
-    console.error("[DEBUG] XHR status:", xhr ? xhr.status : "no xhr");
-    console.error("[DEBUG] XHR response:", xhr ? xhr.responseText : "no xhr");
-
+  myDropzone.on("error", function (file, errorMessage) {
     const message =
       typeof errorMessage === "string"
         ? errorMessage
@@ -173,12 +145,6 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   myDropzone.on("queuecomplete", function () {
-    console.log("[DEBUG] queuecomplete event fired");
-    console.log("[DEBUG] All files status:", myDropzone.files.map(f => ({
-      name: f.name,
-      status: f.status
-    })));
-
     const failedFiles = myDropzone.files.filter(
       (f) => f.status === Dropzone.ERROR
     );
@@ -187,7 +153,6 @@ document.addEventListener("DOMContentLoaded", function () {
     uploadBtn.textContent = "📤 Upload Notes";
 
     if (failedFiles.length > 0) {
-      console.warn("[DEBUG] Some files failed:", failedFiles.map(f => f.name));
       toast("Failed!", "Some files could not be uploaded", "!");
       return;
     }
@@ -200,17 +165,8 @@ document.addEventListener("DOMContentLoaded", function () {
     uploadBtn.disabled = true;
   });
 
-  myDropzone.on("processing", function (file) {
-    console.log("[DEBUG] processing event fired — Dropzone is now uploading:", file.name);
-  });
-
-  myDropzone.on("uploadprogress", function (file, progress) {
-    console.log(`[DEBUG] uploadprogress: ${file.name} — ${progress.toFixed(0)}%`);
-  });
-
   // ── Reset button ────────────────────────────────────────────────────────────
   resetBtn.addEventListener("click", () => {
-    console.log("[DEBUG] Reset button clicked");
     uploadForm.reset();
     myDropzone.removeAllFiles(true);
     uploadBtn.disabled          = true;
@@ -223,20 +179,11 @@ document.addEventListener("DOMContentLoaded", function () {
   // ── Form submit ─────────────────────────────────────────────────────────────
   uploadForm.addEventListener("submit", function (e) {
     e.preventDefault();
-    console.log("[DEBUG] Form submit triggered");
 
     if (myDropzone.files.length === 0) {
-      console.warn("[DEBUG] No files in Dropzone queue — aborting");
       toast("Failed!", "Please select at least one PDF file", "!");
       return;
     }
-
-    console.log("[DEBUG] Files in Dropzone at submit time:", myDropzone.files.map(f => ({
-      name: f.name,
-      status: f.status,
-      accepted: f.accepted,
-      type: f.type,
-    })));
 
     const token = localStorage.getItem("token");
     if (!token) {
@@ -244,11 +191,17 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
+    // Collect form fields into a plain object for JSON body
     const formData   = new FormData(uploadForm);
     const formObject = {};
     formData.forEach((value, key) => { formObject[key] = value; });
 
-    console.log("[DEBUG] Form data being sent to /api/upload-form:", formObject);
+    // NEW: convert the isPrivate checkbox into a visibility field the
+    // backend understands ("public" or "private"). Checkboxes only
+    // appear in FormData when checked, so formObject.isPrivate will be
+    // "on" if checked, or simply absent if unchecked.
+    formObject.visibility = formObject.isPrivate === "on" ? "private" : "public";
+    delete formObject.isPrivate;
 
     uploadBtn.disabled    = true;
     uploadBtn.textContent = "Uploading...";
@@ -264,13 +217,8 @@ document.addEventListener("DOMContentLoaded", function () {
       },
       body: JSON.stringify(formObject),
     })
-      .then((res) => {
-        console.log("[DEBUG] /api/upload-form response status:", res.status);
-        return res.json();
-      })
+      .then((res) => res.json())
       .then((data) => {
-        console.log("[DEBUG] /api/upload-form response body:", data);
-
         if (!data.success) {
           uploadBtn.disabled    = false;
           uploadBtn.textContent = "📤 Upload Notes";
@@ -279,21 +227,10 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         const noteId = data.notesDetail._id;
-        console.log("[DEBUG] noteId received:", noteId);
-
-        // Check queue state before attaching listener
-        console.log("[DEBUG] Files in queue before processQueue():", myDropzone.files.length);
-        console.log("[DEBUG] File statuses:", myDropzone.files.map(f => ({
-          name: f.name,
-          status: f.status,
-          accepted: f.accepted,
-        })));
 
         // STEP 2 — attach sending listener with noteId BEFORE processQueue()
         myDropzone.off("sending");
-
         myDropzone.on("sending", function (file, xhr, fd) {
-          console.log("[DEBUG] sending event — appending noteId:", noteId, "to file:", file.name);
           fd.append("noteId", noteId);
         });
 
@@ -301,15 +238,10 @@ document.addEventListener("DOMContentLoaded", function () {
           Authorization: `Bearer ${token}`,
         };
 
-        console.log("[DEBUG] Calling processQueue() now...");
-
         // STEP 3 — trigger actual file uploads to /api/upload-notes
         myDropzone.processQueue();
-
-        console.log("[DEBUG] processQueue() called — waiting for uploads...");
       })
-      .catch((err) => {
-        console.error("[DEBUG] fetch /api/upload-form threw an error:", err);
+      .catch(() => {
         uploadBtn.disabled    = false;
         uploadBtn.textContent = "📤 Upload Notes";
         toast("Failed!", "An error occurred while uploading", "!");
@@ -325,11 +257,9 @@ function toast(type, message, sign) {
   const toastDesc      = document.querySelector("#toast-des");
 
   if (!toastContainer || !toastSign || !toastType || !toastDesc) {
-    console.warn("[DEBUG] Toast elements not found in DOM. Check upload.html.");
+    console.warn("Toast elements not found in DOM. Check upload.html.");
     return;
   }
-
-  console.log("[DEBUG] Toast fired — type:", type, "| message:", message);
 
   toastContainer.classList.remove("show");
   void toastContainer.offsetWidth;

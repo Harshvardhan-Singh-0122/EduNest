@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="CSS-Files/Dashboard.css" />
   </head>
   <body>
-    <nav class="navbar">
+
+     <nav class="navbar">
       <div class="nav-container">
         <a href="Dashboard.html" class="logo">
           <img
@@ -24,17 +25,28 @@
             <input
               type="text"
               class="search-input"
-              placeholder="Search for notes, subjects, or users..."
+              placeholder="Search your notes..."
             />
           </div>
         </div>
         <div class="nav-auth">
-          <a href="upload.html" class="btn btn-primary"> 📤 Upload Notes </a>
+          <a href="upload.html" class="btn btn-primary">📤 Upload Notes</a>
+          <div class="notif-dropdown">
+              <button class="notif-btn" id="notifBtn" onclick="toggleNotifDropdown()">
+                  🔔
+                  <span class="notif-badge hidden" id="notifBadge">0</span>
+              </button>
+              <div class="notif-menu" id="notifMenu">
+                  <div class="notif-header">Notifications</div>
+                  <div id="notifList">
+                      <p class="notif-empty">Loading...</p>
+                  </div>
+              </div>
+          </div>
           <div class="profile-dropdown">
             <button class="profile-btn" onclick="toggleDropdown()">
               <div class="profile-avatar">👨‍🎓</div>
               <div class="profile-info">
-                <!--This is fill by java Script by  -->
                 <div class="profile-name">
                   <span id="profile-fullname"></span>
                 </div>
@@ -46,7 +58,7 @@
             </button>
             <div class="dropdown-menu" id="profileDropdown">
               <a href="Profile.html" class="dropdown-item">👤 My Profile</a>
-              <a href="#" class="dropdown-item">📚 My Notes</a>
+              <a href="MyNotes.html" class="dropdown-item">📚 My Notes</a>
               <a href="#" class="dropdown-item">❤️ Favorites</a>
               <a href="#" class="dropdown-item">⚙️ Settings</a>
               <a href="#" class="dropdown-item">🔒 Privacy</a>
@@ -302,7 +314,7 @@
         </div>
       </div>
     </div>
-
+    <script src="JS-Files/notifications.js"></script>
     <script src="JS-Files/Dashboard.js"></script>
   </body>
 </html>

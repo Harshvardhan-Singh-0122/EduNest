@@ -31,6 +31,18 @@
         </div>
         <div class="nav-auth">
           <a href="upload.html" class="btn btn-primary">📤 Upload Notes</a>
+          <div class="notif-dropdown">
+              <button class="notif-btn" id="notifBtn" onclick="toggleNotifDropdown()">
+                  🔔
+                  <span class="notif-badge hidden" id="notifBadge">0</span>
+              </button>
+              <div class="notif-menu" id="notifMenu">
+                  <div class="notif-header">Notifications</div>
+                  <div id="notifList">
+                      <p class="notif-empty">Loading...</p>
+                  </div>
+              </div>
+          </div>
           <div class="profile-dropdown">
             <button class="profile-btn" onclick="toggleDropdown()">
               <div class="profile-avatar">👨‍🎓</div>
@@ -76,7 +88,7 @@
         <p style="color: #7f8c8d">Loading your notes...</p>
       </div>
     </div>
-
+    <script src="JS-Files/notifications.js"></script>
     <script src="JS-Files/Dashboard.js"></script>
     <script src="JS-Files/AllNotes.js"></script>
   </body>

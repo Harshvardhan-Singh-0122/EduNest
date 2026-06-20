@@ -26,6 +26,17 @@ const notesSchema = new mongoose.Schema({
   downloads: { type: Number, default: 0 },
   likes: { type: Number, default: 0 },
   uploadAt: { type: Date, default: Date.now },
+  visibility:{
+    type: String,
+    enum:["public", "private"],
+    default: "public",
+  },
+  allowedUsers:[
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+  ],
 });
 
 module.exports = mongoose.model("Notes", notesSchema);

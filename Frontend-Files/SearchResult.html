@@ -9,42 +9,72 @@
 <body>
     <!-- HTML Structure for Grid -->
 
-     <nav class="navbar">
-        <div class="nav-container">
-            <a href="#" class="logo">
-                📚 EduNest
-            </a>
-            <div class="nav-center">
-                <div class="search-bar">
-                    <span class="search-icon">🔍</span>
-                    <input type="text" class="search-input" placeholder="Search for notes, subjects, or users...">
-                </div>
-            </div>
-            <div class="nav-auth">
-                <a href="#" class="btn btn-primary">
-                    📤 Upload Notes
-                </a>
-                <div class="profile-dropdown">
-                    <button class="profile-btn" onclick="toggleDropdown()">
-                        <div class="profile-avatar">👨‍🎓</div>
-                        <div class="profile-info">
-                            <div class="profile-name">Alex Johnson</div>
-                            <div class="profile-university">MIT</div>
-                        </div>
-                        <span style="color: #7f8c8d; font-size: 0.8rem;">▼</span>
-                    </button>
-                    <div class="dropdown-menu" id="profileDropdown">
-                        <a href="Profile.html" class="dropdown-item">👤 My Profile</a>
-                        <a href="#" class="dropdown-item">📚 My Notes</a>
-                        <a href="#" class="dropdown-item">❤️ Favorites</a>
-                        <a href="#" class="dropdown-item">⚙️ Settings</a>
-                        <a href="#" class="dropdown-item">🔒 Privacy</a>
-                        <a href="#" class="dropdown-item">❓ Help</a>
-                        <a href="index.html" class="dropdown-item" style="color: #dc3545;">🚪 Sign Out</a>
-                    </div>
-                </div>
-            </div>
+      <nav class="navbar">
+      <div class="nav-container">
+        <a href="Dashboard.html" class="logo">
+          <img
+            src="\images\EduNest-logo-2.png"
+            alt=""
+            height="80px"
+            width="80px"
+          />
+          EduNest
+        </a>
+        <div class="nav-center">
+          <div class="search-bar">
+            <span class="search-icon">🔍</span>
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search your notes..."
+            />
+          </div>
         </div>
+        <div class="nav-auth">
+          <a href="upload.html" class="btn btn-primary">📤 Upload Notes</a>
+          <div class="notif-dropdown">
+              <button class="notif-btn" id="notifBtn" onclick="toggleNotifDropdown()">
+                  🔔
+                  <span class="notif-badge hidden" id="notifBadge">0</span>
+              </button>
+              <div class="notif-menu" id="notifMenu">
+                  <div class="notif-header">Notifications</div>
+                  <div id="notifList">
+                      <p class="notif-empty">Loading...</p>
+                  </div>
+              </div>
+          </div>
+          <div class="profile-dropdown">
+            <button class="profile-btn" onclick="toggleDropdown()">
+              <div class="profile-avatar">👨‍🎓</div>
+              <div class="profile-info">
+                <div class="profile-name">
+                  <span id="profile-fullname"></span>
+                </div>
+                <div class="profile-university">
+                  <span id="profile-universityName"></span>
+                </div>
+              </div>
+              <span style="color: #7f8c8d; font-size: 0.8rem">▼</span>
+            </button>
+            <div class="dropdown-menu" id="profileDropdown">
+              <a href="Profile.html" class="dropdown-item">👤 My Profile</a>
+              <a href="MyNotes.html" class="dropdown-item">📚 My Notes</a>
+              <a href="#" class="dropdown-item">❤️ Favorites</a>
+              <a href="#" class="dropdown-item">⚙️ Settings</a>
+              <a href="#" class="dropdown-item">🔒 Privacy</a>
+              <a href="#" class="dropdown-item">❓ Help</a>
+              <a
+                href="#"
+                class="dropdown-item"
+                style="color: #dc3545"
+                onclick="logout()"
+                >🚪 Sign Out</a
+              >
+            </div>
+          </div>
+        </div>
+      </div>
     </nav>
 
 <div class="container">
@@ -171,7 +201,7 @@
         </div>
     </div>
 </div>
-
+<script src="JS-Files/notifications.js"></script>
 <script src="JS-Files/SearchResult.js"></script>
 </body>
 </html>

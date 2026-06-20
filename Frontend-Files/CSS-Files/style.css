@@ -288,6 +288,28 @@
             transition: 0.3s;
         }
 
+        /* ── Locked note styling — add to style.css ──────────────────────────────── */
+
+        .locked-note {
+        cursor: default;
+        opacity: 0.92;
+        background: #fafafa;
+        }
+
+        .locked-badge {
+        background: #6c757d !important;
+        }
+
+        .request-access-btn {
+        font-size: 0.85rem;
+        padding: 0.5rem 1rem;
+        }
+
+        .request-access-btn:disabled {
+        cursor: default;
+        opacity: 0.8;
+        }
+
         @media (max-width: 768px) {
             .nav-auth {
                 display: none;
